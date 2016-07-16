@@ -73,6 +73,15 @@ module ADCIRC_interpolation
                                         NSCOUGV, IGCP, NSCOUGC, IGPP, IGWP, NSCOUGW
     end type
 
+    !>
+    !!
+    !!
+    type regrid_data
+        real(ESMF_KIND_R8), pointer     :: src_fieldptr(:), mapped_fieldptr(:), unmapped_fieldptr(:), dst_maskptr(:)
+        type(ESMF_Field)                :: src_datafield, dst_mask_field, dst_mapped_field, dst_unmapped_field
+        type(ESMF_RouteHandle)          :: mapped_route_handle, unmapped_route_handle
+    end type
+
 contains
 
     !> \details As the name of this function suggests, this funciton creates a parallel
@@ -105,7 +114,7 @@ contains
     subroutine create_masked_esmf_mesh_from_data(in_meshdata, mask_array, out_maked_esmf_mesh)
         implicit none
         type(ESMF_Mesh), intent(out)       :: out_maked_esmf_mesh
-        type(meshdata), intent(in)        :: in_meshdata
+        type(meshdata), intent(in)         :: in_meshdata
         integer(ESMF_KIND_I4), intent(in)  :: mask_array(:)
         integer, parameter                 :: dim1=2, spacedim=2, NumND_per_El=3
         integer                            :: rc
@@ -654,6 +663,30 @@ contains
         end if
     end subroutine
 
+    subroutine regrid_datafield_of_present_nodes(the_regrid_data, src_data, dst_data, src_array_of_present_nodes)
+        implicit none
+        type(regrid_data), intent(inout)    :: the_regrid_data
+        type(meshdata)                      :: src_data, dst_data
+        real(ESMF_KIND_R8), intent(in)      :: src_array_of_present_nodes(:)
+        integer                             :: i1, rc
+        do i1 = 1, src_data%NumOwnedNd, 1
+            the_regrid_data%src_fieldptr(i1) = src_array_of_present_nodes(src_data%owned_to_present_nodes(i1))
+        end do
+        call ESMF_FieldRegrid(srcField=the_regrid_data%src_datafield, &
+            dstField=the_regrid_data%dst_mapped_field, &
+            routeHandle=the_regrid_data%mapped_route_handle, rc=rc)
+        print *, "mapped regriding: ", rc
+        call ESMF_FieldRegrid(srcField=the_regrid_data%src_datafield, &
+            dstField=the_regrid_data%dst_unmapped_field, &
+            routeHandle=the_regrid_data%unmapped_route_handle, rc=rc)
+        print *, "unmapped regriding: ", rc
+        do i1 = 1, dst_data%NumOwnedND, 1
+            if (abs(the_regrid_data%dst_maskptr(i1)) < 1.d-8) then
+                the_regrid_data%mapped_fieldptr(i1) = the_regrid_data%unmapped_fieldptr(i1)
+            end if
+        end do
+    end subroutine
+
     !> \details This function simply deallocates the arrays created in the \c meshdata object
     !! creation steps.
     subroutine destroy_meshdata(the_data)
@@ -666,6 +699,22 @@ contains
         deallocate(the_data%ElConnect)
         deallocate(the_data%NdOwners)
         deallocate(the_data%ElTypes)
+    end subroutine
+
+    subroutine destroy_hotdata(the_data)
+        implicit none
+        type(hotdata), intent(inout)    :: the_data
+    end subroutine
+
+    subroutine destroy_regrid_data(the_regrid_data)
+        implicit none
+        type(regrid_data), intent(inout)    :: the_regrid_data
+        call ESMF_FieldRegridRelease(the_regrid_data%mapped_route_handle)
+        call ESMF_FieldRegridRelease(the_regrid_data%unmapped_route_handle)
+        call ESMF_FieldDestroy(the_regrid_data%src_datafield)
+        call ESMF_FieldDestroy(the_regrid_data%dst_mask_field)
+        call ESMF_FieldDestroy(the_regrid_data%dst_mapped_field)
+        call ESMF_FieldDestroy(the_regrid_data%dst_unmapped_field)
     end subroutine
 
 end module ADCIRC_interpolation
@@ -886,14 +935,12 @@ program main
     use ADCIRC_interpolation
 
     implicit none
-    real(ESMF_KIND_R8), pointer                      :: src_fieldptr(:), mapped_fieldptr(:), unmapped_fieldptr(:), &
-                                                        dst_maskptr(:), global_fieldptr(:)
+    real(ESMF_KIND_R8), pointer                      :: global_fieldptr(:)
     type(ESMF_VM)                                    :: vm1
     type(meshdata)                                   :: src_data, dst_data, global_src_data, global_dst_data
     type(hotdata)                                    :: src_hotdata
+    type(regrid_data)                                :: the_regrid_data
     type(ESMF_Mesh)                                  :: src_mesh, dst_mesh
-    type(ESMF_Field)                                 :: src_datafield, dst_unmapped_field, dst_mapped_field, dst_mask_field
-    type(ESMF_RouteHandle)                           :: mapped_route_handle, unmapped_route_handle
     integer                                          :: i1, rc, localPet, petCount
     character(len=6)                                 :: PE_ID
     character(len=:), parameter                      :: src_fort14_dir = "coarse/", dst_fort14_dir = "fine/"
@@ -926,7 +973,6 @@ program main
     call extract_hotdata_from_parallel_binary_fort_67(src_data, src_hotdata, &
         src_fort14_dir, .true.)
     call MPI_Barrier(MPI_COMM_WORLD, rc)
-    return
 
     !
     ! After this point, we plan to overcome an important issue. The issue is
@@ -945,20 +991,28 @@ program main
     !   4- An ESMF_Field on the destination mesh, which will be used for interpolating
     !      data on the destination points with mask=0.
     !
-    src_datafield = ESMF_FieldCreate(mesh=src_mesh, typekind=ESMF_TYPEKIND_R8, rc=rc)
-    dst_mask_field = ESMF_FieldCreate(mesh=dst_mesh, typekind=ESMF_TYPEKIND_R8, rc=rc)
-    dst_mapped_field = ESMF_FieldCreate(mesh=dst_mesh, typekind=ESMF_TYPEKIND_R8, rc=rc)
-    dst_unmapped_field = ESMF_FieldCreate(mesh=dst_mesh, typekind=ESMF_TYPEKIND_R8, rc=rc)
+    the_regrid_data%src_datafield = ESMF_FieldCreate(mesh=src_mesh, &
+        typekind=ESMF_TYPEKIND_R8, rc=rc)
+    the_regrid_data%dst_mask_field = ESMF_FieldCreate(mesh=dst_mesh, &
+        typekind=ESMF_TYPEKIND_R8, rc=rc)
+    the_regrid_data%dst_mapped_field = ESMF_FieldCreate(mesh=dst_mesh, &
+        typekind=ESMF_TYPEKIND_R8, rc=rc)
+    the_regrid_data%dst_unmapped_field = ESMF_FieldCreate(mesh=dst_mesh, &
+        typekind=ESMF_TYPEKIND_R8, rc=rc)
 
     !
     ! This is the preferred procedure in using ESMF to get a pointer to the
     ! ESMF_Field data array, and use that pointer for creating the mask, or
     ! assigning the data to field.
     !
-    call ESMF_FieldGet(src_datafield, farrayPtr=src_fieldptr, rc=rc)
-    call ESMF_FieldGet(dst_mask_field, farrayPtr=dst_maskptr, rc=rc)
-    call ESMF_FieldGet(dst_mapped_field, farrayPtr=mapped_fieldptr, rc=rc)
-    call ESMF_FieldGet(dst_unmapped_field, farrayPtr=unmapped_fieldptr, rc=rc)
+    call ESMF_FieldGet(the_regrid_data%src_datafield, &
+        farrayPtr=the_regrid_data%src_fieldptr, rc=rc)
+    call ESMF_FieldGet(the_regrid_data%dst_mask_field, &
+        farrayPtr=the_regrid_data%dst_maskptr, rc=rc)
+    call ESMF_FieldGet(the_regrid_data%dst_mapped_field, &
+        farrayPtr=the_regrid_data%mapped_fieldptr, rc=rc)
+    call ESMF_FieldGet(the_regrid_data%dst_unmapped_field, &
+        farrayPtr=the_regrid_data%unmapped_fieldptr, rc=rc)
 
     !
     ! At this section, we construct our interpolation operator (A matrix which maps
@@ -966,43 +1020,34 @@ program main
     ! only the interpolation matrices will be constructed. We construct one matrix for
     ! nodal points with mask=1, and one for those points with mask=0.
     !
-    call ESMF_FieldRegridStore(srcField=src_datafield, dstField=dst_mask_field, &
+    call ESMF_FieldRegridStore(srcField=the_regrid_data%src_datafield, &
+        dstField=the_regrid_data%dst_mask_field, &
         unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
-        routeHandle=mapped_route_handle, regridmethod=ESMF_REGRIDMETHOD_BILINEAR, &
-        rc=rc)
-    call ESMF_FieldRegridStore(srcField=src_datafield, dstField=dst_unmapped_field, &
+        routeHandle=the_regrid_data%mapped_route_handle, &
+        regridmethod=ESMF_REGRIDMETHOD_BILINEAR, rc=rc)
+    call ESMF_FieldRegridStore(srcField=the_regrid_data%src_datafield, &
+        dstField=the_regrid_data%dst_unmapped_field, &
         unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
-        routeHandle=unmapped_route_handle, regridmethod=ESMF_REGRIDMETHOD_NEAREST_STOD, &
-        rc=rc)
+        routeHandle=the_regrid_data%unmapped_route_handle, &
+        regridmethod=ESMF_REGRIDMETHOD_NEAREST_STOD, rc=rc)
 
     !
     ! This is the place that we create our mask on the destination mesh. By mask,
     ! we mean an array with length equal to number of nodes, whose values are equal
     ! to 1 at mapped nodes and 0 on unmapped nodes.
     !
-    src_fieldptr = 1.d0
-    call ESMF_FieldRegrid(srcField=src_datafield, dstField=dst_mask_field, &
-        routehandle=mapped_route_handle, rc=rc)
+    the_regrid_data%src_fieldptr = 1.d0
+    call ESMF_FieldRegrid(srcField=the_regrid_data%src_datafield, &
+        dstField=the_regrid_data%dst_mask_field, &
+        routehandle=the_regrid_data%mapped_route_handle, rc=rc)
 
     !
     ! As a test for our interpolation, we use the bathymetry in the source mesh as our
     ! field to be inerpolated and add 1.d4 to its values at different points. Next, we
     ! interpoalte, source field to destination field.
     !
-    do i1 = 1, src_data%NumOwnedNd, 1
-        src_fieldptr(i1) = src_data%bathymetry(src_data%owned_to_present_nodes(i1)) + 1.d4
-    end do
-    call ESMF_FieldRegrid(srcField=src_datafield, dstField=dst_mapped_field, &
-        routeHandle=mapped_route_handle, rc=rc)
-    print *, "mapped regriding: ", rc
-    call ESMF_FieldRegrid(srcField=src_datafield, dstField=dst_unmapped_field, &
-        routeHandle=unmapped_route_handle, rc=rc)
-    print *, "unmapped regriding: ", rc
-    do i1 = 1, dst_data%NumOwnedND, 1
-        if (abs(dst_maskptr(i1)) < 1.d-8) then
-            mapped_fieldptr(i1) = unmapped_fieldptr(i1)
-        end if
-    end do
+    call regrid_datafield_of_present_nodes(the_regrid_data, src_data, dst_data, src_data%bathymetry + 1.d4)
+
 
     !
     ! Finally, we want to visualize our results. This is not required in actual usage.
@@ -1015,7 +1060,7 @@ program main
         call extract_global_data_from_fort14("fine/fort.14", global_dst_data)
         call write_meshdata_to_vtu(global_dst_data, "fine/global_mesh.vtu", .false.)
     end if
-    call gather_datafield_on_root(vm1, mapped_fieldptr, 0, global_dst_data%NumNd, &
+    call gather_datafield_on_root(vm1, the_regrid_data%mapped_fieldptr, 0, global_dst_data%NumNd, &
         global_fieldptr)
     if (localPet == 0) then
         call write_node_field_to_vtu(global_fieldptr, "interp_bath", "fine/global_mesh.vtu", .true.)
@@ -1029,12 +1074,7 @@ program main
         call destroy_meshdata(global_dst_data)
         call destroy_meshdata(global_src_data)
     end if
-    call ESMF_FieldRegridRelease(mapped_route_handle)
-    call ESMF_FieldRegridRelease(unmapped_route_handle)
-    call ESMF_FieldDestroy(src_datafield)
-    call ESMF_FieldDestroy(dst_mask_field)
-    call ESMF_FieldDestroy(dst_mapped_field)
-    call ESMF_FieldDestroy(dst_unmapped_field)
+    call destroy_regrid_data(the_regrid_data)
     call ESMF_MeshDestroy(dst_mesh)
     call ESMF_MeshDestroy(src_mesh)
     call destroy_meshdata(src_data)
