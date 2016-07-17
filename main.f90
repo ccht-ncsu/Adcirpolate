@@ -93,7 +93,7 @@ contains
     subroutine create_parallel_esmf_mesh_from_meshdata(the_data, out_esmf_mesh)
         implicit none
         type(ESMF_Mesh), intent(out)                  :: out_esmf_mesh
-        type(meshdata), intent(in)                   :: the_data
+        type(meshdata), intent(in)                    :: the_data
         integer, parameter                            :: dim1=2, spacedim=2, NumND_per_El=3
         integer                                       :: rc
         out_esmf_mesh=ESMF_MeshCreate(parametricDim=dim1, spatialDim=spacedim, &
@@ -532,6 +532,7 @@ contains
         character(len=200)           :: fort67_filename, fort67_ascii_filename
 
         call ESMF_VMGet(vm=the_meshdata%vm, localPet=localPet, petCount=petCount, rc=rc)
+        call allocate_hotdata(the_hotdata, the_meshdata)
 
         write(PE_ID, "(A,I4.4)") "PE", localPet
         fort67_filename = trim(global_fort14_dir//PE_ID//"/fort.67")
@@ -554,14 +555,7 @@ contains
         ihotstp=ihotstp+1
         read(unit=67, REC=ihotstp) the_hotdata%NE_A_IN;
         ihotstp=ihotstp+1
-        allocate(the_hotdata%ETA1(the_meshdata%NumNd))
-        allocate(the_hotdata%ETA2(the_meshdata%NumNd))
-        allocate(the_hotdata%ETADisc(the_meshdata%NumNd))
-        allocate(the_hotdata%UU2(the_meshdata%NumNd))
-        allocate(the_hotdata%VV2(the_meshdata%NumNd))
-        allocate(the_hotdata%CH1(the_meshdata%NumNd))
-        allocate(the_hotdata%NNODECODE(the_meshdata%NumNd))
-        allocate(the_hotdata%NOFF(the_meshdata%NumEl))
+
         do i1 = 1, the_meshdata%NumNd, 1
             read(unit=67, REC=ihotstp) the_hotdata%ETA1(i1)
             ihotstp=ihotstp+1
@@ -596,6 +590,7 @@ contains
             read(unit=67, REC=ihotstp) the_hotdata%NOFF(i1)
             ihotstp=ihotstp+1
         end do
+
         read(unit=67,REC=ihotstp) the_hotdata%IESTP
         ihotstp=ihotstp+1
         read(unit=67,REC=ihotstp) the_hotdata%NSCOUE
@@ -661,6 +656,20 @@ contains
                 the_hotdata%IGPP, the_hotdata%IGWP, the_hotdata%NSCOUGW
             close(670)
         end if
+    end subroutine
+
+    subroutine allocate_hotdata(the_hotdata, the_meshdata)
+        implicit none
+        type(hotdata), intent(inout)    :: the_hotdata
+        type(meshdata), intent(in)      :: the_meshdata
+        allocate(the_hotdata%ETA1(the_meshdata%NumNd))
+        allocate(the_hotdata%ETA2(the_meshdata%NumNd))
+        allocate(the_hotdata%ETADisc(the_meshdata%NumNd))
+        allocate(the_hotdata%UU2(the_meshdata%NumNd))
+        allocate(the_hotdata%VV2(the_meshdata%NumNd))
+        allocate(the_hotdata%CH1(the_meshdata%NumNd))
+        allocate(the_hotdata%NNODECODE(the_meshdata%NumNd))
+        allocate(the_hotdata%NOFF(the_meshdata%NumEl))
     end subroutine
 
     subroutine regrid_datafield_of_present_nodes(the_regrid_data, src_data, dst_data, src_array_of_present_nodes)
@@ -938,7 +947,7 @@ program main
     real(ESMF_KIND_R8), pointer                      :: global_fieldptr(:)
     type(ESMF_VM)                                    :: vm1
     type(meshdata)                                   :: src_data, dst_data, global_src_data, global_dst_data
-    type(hotdata)                                    :: src_hotdata
+    type(hotdata)                                    :: src_hotdata, dst_hotdata
     type(regrid_data)                                :: the_regrid_data
     type(ESMF_Mesh)                                  :: src_mesh, dst_mesh
     integer                                          :: i1, rc, localPet, petCount
@@ -968,11 +977,12 @@ program main
     call write_meshdata_to_vtu(dst_data, PE_ID//"_dst_mesh.vtu", .true.)
 
     !
-    ! Now, let us read data from fort.67.
+    ! Now, let us read data from fort.67. We also allocate the hotdata structure for
+    ! destination mesh and fields.
     !
     call extract_hotdata_from_parallel_binary_fort_67(src_data, src_hotdata, &
         src_fort14_dir, .true.)
-    call MPI_Barrier(MPI_COMM_WORLD, rc)
+    call allocate_hotdata(dst_hotdata, dst_data)
 
     !
     ! After this point, we plan to overcome an important issue. The issue is
@@ -1042,12 +1052,21 @@ program main
         routehandle=the_regrid_data%mapped_route_handle, rc=rc)
 
     !
-    ! As a test for our interpolation, we use the bathymetry in the source mesh as our
-    ! field to be inerpolated and add 1.d4 to its values at different points. Next, we
-    ! interpoalte, source field to destination field.
+    ! Now we map the nodal values of ETA1, ETA2, ETADisc, UU2, VV2, CH1
+    ! from the source mesh to the destination mesh.
     !
-    call regrid_datafield_of_present_nodes(the_regrid_data, src_data, dst_data, src_data%bathymetry + 1.d4)
-
+    call regrid_datafield_of_present_nodes(the_regrid_data, src_data, dst_data, src_hotdata%ETA1)
+    dst_hotdata%ETA1 = the_regrid_data%mapped_fieldptr
+    call regrid_datafield_of_present_nodes(the_regrid_data, src_data, dst_data, src_hotdata%ETA2)
+    dst_hotdata%ETA2 = the_regrid_data%mapped_fieldptr
+    call regrid_datafield_of_present_nodes(the_regrid_data, src_data, dst_data, src_hotdata%ETADisc)
+    dst_hotdata%ETADisc = the_regrid_data%mapped_fieldptr
+    call regrid_datafield_of_present_nodes(the_regrid_data, src_data, dst_data, src_hotdata%UU2)
+    dst_hotdata%UU2 = the_regrid_data%mapped_fieldptr
+    call regrid_datafield_of_present_nodes(the_regrid_data, src_data, dst_data, src_hotdata%VV2)
+    dst_hotdata%VV2 = the_regrid_data%mapped_fieldptr
+    call regrid_datafield_of_present_nodes(the_regrid_data, src_data, dst_data, src_hotdata%CH1)
+    dst_hotdata%CH1 = the_regrid_data%mapped_fieldptr
 
     !
     ! Finally, we want to visualize our results. This is not required in actual usage.
