@@ -493,7 +493,7 @@ contains
         call MPI_Gatherv(fieldarray, send_count, MPI_DOUBLE_PRECISION, &
             temp_fieldarray, recv_counts, gather_displs, MPI_DOUBLE_PRECISION, &
             0, MPI_COMM_WORLD, rc)
-        print *, "gathered on root: ", rc
+        if (localPet == 0) print *, "gathered on root: ", rc
 
         if (localPet == 0) then
             do i1 = 1, petCount, 1
@@ -516,6 +516,53 @@ contains
                 end do
             end do
         end if
+    end subroutine
+
+    !>
+    !!
+    !!
+    subroutine gather_nodal_hotdata_on_root(localized_hotdata, global_hotdata, &
+            localized_meshdata, global_meshdata, root)
+        implicit none
+        real(ESMF_KIND_R8), pointer       :: localfieldarray_ptr(:), globalfieldarray_ptr(:)
+        type(hotdata), intent(in)         :: localized_hotdata
+        type(hotdata), intent(inout)      :: global_hotdata
+        type(meshdata), intent(in)        :: localized_meshdata
+        type(meshdata), intent(in)        :: global_meshdata
+        integer                           :: root, localPet, petCount, rc
+
+        call ESMF_VMGet(vm=localized_meshdata%vm, localPet=localPet, petCount=petCount, rc=rc)
+        allocate(localfieldarray_ptr(localized_meshdata%NumOwnedNd))
+
+        localfieldarray_ptr = localized_hotdata%ETA1
+        call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
+            root, global_meshdata%NumNd, globalfieldarray_ptr)
+        if (localPet == root) global_hotdata%ETA1 = globalfieldarray_ptr
+        !
+        localfieldarray_ptr = localized_hotdata%ETA2
+        call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
+            root, global_meshdata%NumNd, globalfieldarray_ptr)
+        if (localPet == root) global_hotdata%ETA2 = globalfieldarray_ptr
+        !
+        localfieldarray_ptr = localized_hotdata%ETADisc
+        call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
+            root, global_meshdata%NumNd, globalfieldarray_ptr)
+        if (localPet == root) global_hotdata%ETADisc = globalfieldarray_ptr
+        !
+        localfieldarray_ptr = localized_hotdata%UU2
+        call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
+            root, global_meshdata%NumNd, globalfieldarray_ptr)
+        if (localPet == root) global_hotdata%UU2 = globalfieldarray_ptr
+        !
+        localfieldarray_ptr = localized_hotdata%VV2
+        call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
+            root, global_meshdata%NumNd, globalfieldarray_ptr)
+        if (localPet == root) global_hotdata%VV2 = globalfieldarray_ptr
+        !
+        localfieldarray_ptr = localized_hotdata%CH1
+        call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
+            root, global_meshdata%NumNd, globalfieldarray_ptr)
+        if (localPet == root) global_hotdata%CH1 = globalfieldarray_ptr
     end subroutine
 
     !>
@@ -658,6 +705,142 @@ contains
         end if
     end subroutine
 
+    !>
+    !!
+    !!
+    subroutine write_serial_hotfile_to_fort_67(the_meshdata, the_hotdata, global_fort14_dir, write_ascii)
+        implicit none
+        type(meshdata), intent(in)   :: the_meshdata
+        type(hotdata), intent(in)    :: the_hotdata
+        character(len=*), intent(in) :: global_fort14_dir
+        logical, intent(in)          :: write_ascii
+        integer                      :: i1, rc, ihotstp
+        character(len=200)           :: fort67_filename, fort67_ascii_filename
+
+        fort67_filename = trim(global_fort14_dir//"/fort.67")
+        open(unit=67, file=fort67_filename, action='WRITE', &
+            access='DIRECT', recl=8, iostat=rc, status='UNKNOWN')
+
+        ihotstp=1
+        write(unit=67, REC=ihotstp) the_hotdata%InputFileFmtVn;
+        ihotstp=ihotstp+1
+        write(unit=67, REC=ihotstp) the_hotdata%IMHS;
+        ihotstp=ihotstp+1
+        write(unit=67, REC=ihotstp) the_hotdata%TimeLoc;
+        ihotstp=ihotstp+1
+        write(unit=67, REC=ihotstp) the_hotdata%ITHS;
+        ihotstp=ihotstp+1
+        write(unit=67, REC=ihotstp) the_hotdata%NP_G_IN;
+        ihotstp=ihotstp+1
+        write(unit=67, REC=ihotstp) the_hotdata%NE_G_IN;
+        ihotstp=ihotstp+1
+        write(unit=67, REC=ihotstp) the_hotdata%NP_A_IN;
+        ihotstp=ihotstp+1
+        write(unit=67, REC=ihotstp) the_hotdata%NE_A_IN;
+        ihotstp=ihotstp+1
+
+        do i1 = 1, the_meshdata%NumNd, 1
+            write(unit=67, REC=ihotstp) the_hotdata%ETA1(i1)
+            ihotstp=ihotstp+1
+        end do
+        do i1 = 1, the_meshdata%NumNd, 1
+            write(unit=67, REC=ihotstp) the_hotdata%ETA2(i1)
+            ihotstp=ihotstp+1
+        end do
+        do i1 = 1, the_meshdata%NumNd, 1
+            write(unit=67, REC=ihotstp) the_hotdata%ETADisc(i1)
+            ihotstp=ihotstp+1
+        end do
+        do i1 = 1, the_meshdata%NumNd, 1
+            write(unit=67, REC=ihotstp) the_hotdata%UU2(i1)
+            ihotstp=ihotstp+1
+        end do
+        do i1 = 1, the_meshdata%NumNd, 1
+            write(unit=67, REC=ihotstp) the_hotdata%VV2(i1)
+            ihotstp=ihotstp+1
+        end do
+        if (the_hotdata%IMHS.EQ.10) then
+            do i1 = 1, the_meshdata%NumNd, 1
+                write(unit=67, REC=ihotstp) the_hotdata%CH1(i1)
+                ihotstp=ihotstp+1
+            end do
+        end if
+        do i1 = 1, the_meshdata%NumNd, 1
+            write(unit=67, REC=ihotstp) the_hotdata%NNODECODE(i1)
+            ihotstp=ihotstp+1
+        end do
+        do i1 = 1, the_meshdata%NumEl, 1
+            write(unit=67, REC=ihotstp) the_hotdata%NOFF(i1)
+            ihotstp=ihotstp+1
+        end do
+
+        write(unit=67,REC=ihotstp) the_hotdata%IESTP
+        ihotstp=ihotstp+1
+        write(unit=67,REC=ihotstp) the_hotdata%NSCOUE
+        ihotstp=ihotstp+1
+        write(unit=67,REC=ihotstp) the_hotdata%IVSTP
+        ihotstp=ihotstp+1
+        write(unit=67,REC=ihotstp) the_hotdata%NSCOUV
+        ihotstp=ihotstp+1
+        write(unit=67,REC=ihotstp) the_hotdata%ICSTP
+        ihotstp=ihotstp+1
+        write(unit=67,REC=ihotstp) the_hotdata%NSCOUC
+        ihotstp=ihotstp+1
+        write(unit=67,REC=ihotstp) the_hotdata%IPSTP
+        ihotstp=ihotstp+1
+        write(unit=67,REC=ihotstp) the_hotdata%IWSTP
+        ihotstp=ihotstp+1
+        write(unit=67,REC=ihotstp) the_hotdata%NSCOUM
+        ihotstp=ihotstp+1
+        write(unit=67,REC=ihotstp) the_hotdata%IGEP
+        ihotstp=ihotstp+1
+        write(unit=67,REC=ihotstp) the_hotdata%NSCOUGE
+        ihotstp=ihotstp+1
+        write(unit=67,REC=ihotstp) the_hotdata%IGVP
+        ihotstp=ihotstp+1
+        write(unit=67,REC=ihotstp) the_hotdata%NSCOUGV
+        ihotstp=ihotstp+1
+        write(unit=67,REC=ihotstp) the_hotdata%IGCP
+        ihotstp=ihotstp+1
+        write(unit=67,REC=ihotstp) the_hotdata%NSCOUGC
+        ihotstp=ihotstp+1
+        write(unit=67,REC=ihotstp) the_hotdata%IGPP
+        ihotstp=ihotstp+1
+        write(unit=67,REC=ihotstp) the_hotdata%IGWP
+        ihotstp=ihotstp+1
+        write(unit=67,REC=ihotstp) the_hotdata%NSCOUGW
+        ihotstp=ihotstp+1
+        close(67)
+
+        if (write_ascii) then
+            fort67_ascii_filename = trim(global_fort14_dir//"/fort.67")//".txt"
+            open(unit=670, file=fort67_ascii_filename, form='FORMATTED', &
+                action='WRITE', iostat=rc)
+            write(unit=670, fmt=*) the_hotdata%InputFileFmtVn
+            write(unit=670, fmt=*) the_hotdata%IMHS
+            write(unit=670, fmt=*) the_hotdata%TimeLoc
+            write(unit=670, fmt=*) the_hotdata%ITHS
+            write(unit=670, fmt=*) the_hotdata%NP_G_IN
+            write(unit=670, fmt=*) the_hotdata%NE_G_IN
+            write(unit=670, fmt=*) the_hotdata%NP_A_IN
+            write(unit=670, fmt=*) the_hotdata%NE_A_IN
+            write(unit=670, fmt=*) the_hotdata%ETA1
+            write(unit=670, fmt=*) the_hotdata%ETA2
+            write(unit=670, fmt=*) the_hotdata%ETADisc
+            write(unit=670, fmt=*) the_hotdata%UU2
+            write(unit=670, fmt=*) the_hotdata%VV2
+            write(unit=670, fmt=*) the_hotdata%CH1
+            write(unit=670, fmt=*) the_hotdata%NNODECODE
+            write(unit=670, fmt=*) the_hotdata%NOFF
+            write(unit=670, fmt=*) the_hotdata%IESTP, the_hotdata%NSCOUE, the_hotdata%IVSTP, &
+                the_hotdata%NSCOUV, the_hotdata%ICSTP, the_hotdata%NSCOUC, the_hotdata%IPSTP, &
+                the_hotdata%IWSTP, the_hotdata%NSCOUM, the_hotdata%IGEP, the_hotdata%NSCOUGE, &
+                the_hotdata%IGVP, the_hotdata%NSCOUGV, the_hotdata%IGCP, the_hotdata%NSCOUGC, &
+                the_hotdata%IGPP, the_hotdata%IGWP, the_hotdata%NSCOUGW
+            close(670)
+        end if
+    end subroutine
+
     subroutine allocate_hotdata(the_hotdata, the_meshdata)
         implicit none
         type(hotdata), intent(inout)    :: the_hotdata
@@ -677,18 +860,19 @@ contains
         type(regrid_data), intent(inout)    :: the_regrid_data
         type(meshdata)                      :: src_data, dst_data
         real(ESMF_KIND_R8), intent(in)      :: src_array_of_present_nodes(:)
-        integer                             :: i1, rc
+        integer                             :: i1, localPet, petCount, rc
+        call ESMF_VMGet(vm=src_data%vm, localPet=localPet, petCount=petCount, rc=rc)
         do i1 = 1, src_data%NumOwnedNd, 1
             the_regrid_data%src_fieldptr(i1) = src_array_of_present_nodes(src_data%owned_to_present_nodes(i1))
         end do
         call ESMF_FieldRegrid(srcField=the_regrid_data%src_datafield, &
             dstField=the_regrid_data%dst_mapped_field, &
             routeHandle=the_regrid_data%mapped_route_handle, rc=rc)
-        print *, "mapped regriding: ", rc
+        if (localPet == 0) print *, "mapped regriding: ", rc
         call ESMF_FieldRegrid(srcField=the_regrid_data%src_datafield, &
             dstField=the_regrid_data%dst_unmapped_field, &
             routeHandle=the_regrid_data%unmapped_route_handle, rc=rc)
-        print *, "unmapped regriding: ", rc
+        if (localPet == 0) print *, "unmapped regriding: ", rc
         do i1 = 1, dst_data%NumOwnedND, 1
             if (abs(the_regrid_data%dst_maskptr(i1)) < 1.d-8) then
                 the_regrid_data%mapped_fieldptr(i1) = the_regrid_data%unmapped_fieldptr(i1)
@@ -944,15 +1128,15 @@ program main
     use ADCIRC_interpolation
 
     implicit none
-    real(ESMF_KIND_R8), pointer                      :: global_fieldptr(:)
-    type(ESMF_VM)                                    :: vm1
-    type(meshdata)                                   :: src_data, dst_data, global_src_data, global_dst_data
-    type(hotdata)                                    :: src_hotdata, dst_hotdata
-    type(regrid_data)                                :: the_regrid_data
-    type(ESMF_Mesh)                                  :: src_mesh, dst_mesh
-    integer                                          :: i1, rc, localPet, petCount
-    character(len=6)                                 :: PE_ID
-    character(len=:), parameter                      :: src_fort14_dir = "coarse/", dst_fort14_dir = "fine/"
+    real(ESMF_KIND_R8), pointer   :: global_fieldptr(:)
+    type(ESMF_VM)                 :: vm1
+    type(meshdata)                :: src_data, dst_data, global_src_data, global_dst_data
+    type(hotdata)                 :: src_hotdata, dst_hotdata, global_dst_hotdata
+    type(regrid_data)             :: the_regrid_data
+    type(ESMF_Mesh)               :: src_mesh, dst_mesh
+    integer                       :: i1, rc, localPet, petCount
+    character(len=6)              :: PE_ID
+    character(len=:), parameter   :: src_fort14_dir = "coarse/", dst_fort14_dir = "fine/"
 
     !
     ! Any program using ESMF library should start with ESMF_Initialize(...).
@@ -983,6 +1167,8 @@ program main
     call extract_hotdata_from_parallel_binary_fort_67(src_data, src_hotdata, &
         src_fort14_dir, .true.)
     call allocate_hotdata(dst_hotdata, dst_data)
+    if (localPet == 0) then
+    end if
 
     !
     ! After this point, we plan to overcome an important issue. The issue is
@@ -1057,14 +1243,19 @@ program main
     !
     call regrid_datafield_of_present_nodes(the_regrid_data, src_data, dst_data, src_hotdata%ETA1)
     dst_hotdata%ETA1 = the_regrid_data%mapped_fieldptr
+
     call regrid_datafield_of_present_nodes(the_regrid_data, src_data, dst_data, src_hotdata%ETA2)
     dst_hotdata%ETA2 = the_regrid_data%mapped_fieldptr
+
     call regrid_datafield_of_present_nodes(the_regrid_data, src_data, dst_data, src_hotdata%ETADisc)
     dst_hotdata%ETADisc = the_regrid_data%mapped_fieldptr
+
     call regrid_datafield_of_present_nodes(the_regrid_data, src_data, dst_data, src_hotdata%UU2)
     dst_hotdata%UU2 = the_regrid_data%mapped_fieldptr
+
     call regrid_datafield_of_present_nodes(the_regrid_data, src_data, dst_data, src_hotdata%VV2)
     dst_hotdata%VV2 = the_regrid_data%mapped_fieldptr
+
     call regrid_datafield_of_present_nodes(the_regrid_data, src_data, dst_data, src_hotdata%CH1)
     dst_hotdata%CH1 = the_regrid_data%mapped_fieldptr
 
@@ -1075,14 +1266,55 @@ program main
     !
     if (localPet == 0) then
         call extract_global_data_from_fort14("coarse/fort.14", global_src_data)
-        call write_meshdata_to_vtu(global_src_data, "coarse/global_mesh.vtu", .true.)
         call extract_global_data_from_fort14("fine/fort.14", global_dst_data)
+        call allocate_hotdata(global_dst_hotdata, global_dst_data)
+
+        call write_meshdata_to_vtu(global_src_data, "coarse/global_mesh.vtu", .true.)
         call write_meshdata_to_vtu(global_dst_data, "fine/global_mesh.vtu", .false.)
     end if
+
+    call gather_nodal_hotdata_on_root(dst_hotdata, global_dst_hotdata, dst_data, global_dst_data, 0)
+
     call gather_datafield_on_root(vm1, the_regrid_data%mapped_fieldptr, 0, global_dst_data%NumNd, &
         global_fieldptr)
     if (localPet == 0) then
         call write_node_field_to_vtu(global_fieldptr, "interp_bath", "fine/global_mesh.vtu", .true.)
+    end if
+
+    !
+    ! Now we write the hotstart mesh for the destination mesh.
+    !
+    if (localPet == 0) then
+        global_dst_hotdata%InputFileFmtVn = src_hotdata%InputFileFmtVn
+        global_dst_hotdata%IMHS = src_hotdata%IMHS
+        global_dst_hotdata%TimeLoc = src_hotdata%TimeLoc
+        global_dst_hotdata%ITHS = src_hotdata%ITHS
+        global_dst_hotdata%NP_G_IN = global_dst_data%NumNd
+        global_dst_hotdata%NE_G_IN = global_dst_data%NumEl
+        global_dst_hotdata%NP_A_IN = global_dst_data%NumNd
+        global_dst_hotdata%NE_A_IN = global_dst_data%NumEl
+        global_dst_hotdata%NNODECODE = 1
+        global_dst_hotdata%NOFF = 1
+        global_dst_hotdata%IESTP = 0
+        global_dst_hotdata%NSCOUE = 0
+        global_dst_hotdata%IVSTP = 0
+        global_dst_hotdata%NSCOUV = 0
+        global_dst_hotdata%ICSTP = 0
+        global_dst_hotdata%NSCOUC = 0
+        global_dst_hotdata%IPSTP = 0
+        global_dst_hotdata%IWSTP = 0
+        global_dst_hotdata%NSCOUM = 0
+        global_dst_hotdata%IGEP = 0
+        global_dst_hotdata%NSCOUGE = 0
+        global_dst_hotdata%IGVP = 0
+        global_dst_hotdata%NSCOUGV = 0
+        global_dst_hotdata%IGCP = 0
+        global_dst_hotdata%NSCOUGC = 0
+        global_dst_hotdata%IGPP = 0
+        global_dst_hotdata%IGWP = 0
+        global_dst_hotdata%NSCOUGW = 0
+        call write_serial_hotfile_to_fort_67(global_dst_data, global_dst_hotdata, &
+            dst_fort14_dir, .true.)
     end if
 
     !
