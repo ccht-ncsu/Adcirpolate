@@ -254,118 +254,118 @@ contains
 
         open(unit=1014, file=vtu_filename, form='FORMATTED', &
             status='UNKNOWN', action='WRITE')
-        write(unit=1014, fmt="(A A)") '<VTKFile type="UnstructuredGrid"', &
+        write(unit=1014, fmt="(A,A)") '<VTKFile type="UnstructuredGrid"', &
             ' version="0.1" byte_order="BigEndian">'
         indent = indent + 2
-        write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+        write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
             "<UnstructuredGrid>"
         indent = indent + 2
-        write(unit=1014, fmt="(A A I0 A I0 A)") repeat(" ",indent), &
+        write(unit=1014, fmt="(A,A,I0,A,I0,A)") repeat(" ",indent), &
             '<Piece NumberOfPoints="', the_data%NumNd, &
             '" NumberOfCells="', the_data%NumEl, '">'
         indent = indent + 2
 
-        write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+        write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
             '<Points>'
         indent = indent + 2
-        write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+        write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
             '<DataArray type="Float32" NumberOfComponents="3" Format="ascii">'
         indent = indent + 2
         do i1 = 1, the_data%NumNd, 1
-            write(unit=1014, fmt="(A F0.4 ' ' F0.4 ' ' F0.4 ' ')") repeat(" ",indent), &
+            write(unit=1014, fmt="(A,F0.4,' ',F0.4,' ',F0.4,' ')") repeat(" ",indent), &
                 the_data%NdCoords((i1-1)*dim1 + 1), &
                 the_data%NdCoords((i1-1)*dim1 + 2), 0.0
         end do
         indent = indent - 2
-        write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+        write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
             '</DataArray>'
         indent = indent - 2
-        write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+        write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
             '</Points>'
 
-        write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+        write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
             '<Cells>'
         indent = indent + 2
-        write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+        write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
             '<DataArray type="Int32" Name="connectivity" Format="ascii">'
         indent = indent + 2
         do i1 = 1, the_data%NumEl, 1
-            write(unit=1014, fmt="(A I0 ' ' I0 ' ' I0 ' ')") repeat(" ",indent),&
+            write(unit=1014, fmt="(A,I0,' ',I0,' ',I0,' ')") repeat(" ",indent),&
                 the_data%ElConnect((i1-1)*NumND_per_El+1)-1, &
                 the_data%ElConnect((i1-1)*NumND_per_El+2)-1, &
                 the_data%ElConnect((i1-1)*NumND_per_El+3)-1
         end do
         indent = indent - 2
-        write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+        write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
             '</DataArray>'
-        write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+        write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
             '<DataArray type="Int32" Name="offsets" Format="ascii">'
         indent = indent + 2
         offset_counter = 0
         do i1 = 1, the_data%NumEl, 1
             offset_counter = offset_counter + 3
-            write(unit=1014, fmt="(A I0)") repeat(" ",indent), &
+            write(unit=1014, fmt="(A,I0)") repeat(" ",indent), &
                 offset_counter
         end do
         indent = indent - 2
-        write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+        write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
             '</DataArray>'
-        write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+        write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
             '<DataArray type="Int32" Name="types" Format="ascii">'
         indent = indent + 2
         do i1=1, the_data%NumEl, 1
-            write(unit=1014, fmt="(A I2)") repeat(" ",indent), &
+            write(unit=1014, fmt="(A,I2)") repeat(" ",indent), &
                 vtk_triangle
         end do
         indent = indent - 2
-        write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+        write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
             '</DataArray>'
         indent = indent - 2
-        write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+        write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
             '</Cells>'
 
-        write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+        write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
             '<CellData Scalars="scalars">'
         indent = indent + 2
-        write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+        write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
             '<DataArray type="Int32" Name="subdomain_id" NumberOfComponents="1" Format="ascii">'
         indent = indent + 2
         do i1 = 1, the_data%NumEl, 1
-            write(unit=1014, fmt="(A I0)") repeat(" ",indent), localPet
+            write(unit=1014, fmt="(A,I0)") repeat(" ",indent), localPet
         end do
         indent = indent - 2
-        write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+        write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
             '</DataArray>'
         indent = indent - 2
-        write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+        write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
             '</CellData>'
 
-        write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+        write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
             '<PointData Scalars="scalars">'
         indent = indent + 2
-        write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+        write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
             '<DataArray type="Float32" Name="bathymetry" NumberOfComponents="1" Format="ascii">'
         indent = indent + 2
         do i1 = 1, the_data%NumNd, 1
-            write(unit=1014, fmt="(A F0.4)") repeat(" ",indent), &
+            write(unit=1014, fmt="(A,F0.4)") repeat(" ",indent), &
                 the_data%bathymetry(i1)
         end do
         indent = indent - 2
-        write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+        write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
             '</DataArray>'
 
         if (last_write) then
             indent = indent - 2
-            write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+            write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
                 '</PointData>'
             indent = indent - 2
-            write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+            write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
                 '</Piece>'
             indent = indent - 2
-            write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+            write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
                 '</UnstructuredGrid>'
             indent = indent - 2
-            write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+            write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
                 '</VTKFile>'
         end if
         close(1014)
@@ -385,29 +385,29 @@ contains
             position='APPEND', status='OLD', action='WRITE')
 
         indent = 8
-        write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+        write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
             '<DataArray type="Float32" Name="'//field_name//'" NumberOfComponents="1" Format="ascii">'
         indent = indent + 2
         num_recs = size(field_array)
         do i1 = 1, num_recs, 1
-            write(unit=1014, fmt="(A F0.4)") repeat(" ",indent), field_array(i1)
+            write(unit=1014, fmt="(A,F0.4)") repeat(" ",indent), field_array(i1)
         end do
         indent = indent - 2
-        write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+        write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
             '</DataArray>'
 
         if (last_write) then
             indent = indent - 2
-            write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+            write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
                 '</PointData>'
             indent = indent - 2
-            write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+            write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
                 '</Piece>'
             indent = indent - 2
-            write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+            write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
                 '</UnstructuredGrid>'
             indent = indent - 2
-            write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+            write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
                 '</VTKFile>'
         end if
         close(1014)
@@ -1136,7 +1136,7 @@ program main
     type(ESMF_Mesh)               :: src_mesh, dst_mesh
     integer                       :: i1, rc, localPet, petCount
     character(len=6)              :: PE_ID
-    character(len=:), parameter   :: src_fort14_dir = "coarse/", dst_fort14_dir = "fine/"
+    character(len=*), parameter   :: src_fort14_dir = "coarse/", dst_fort14_dir = "fine/"
 
     !
     ! Any program using ESMF library should start with ESMF_Initialize(...).
