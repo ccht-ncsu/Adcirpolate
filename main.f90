@@ -58,6 +58,8 @@ module ADCIRC_interpolation
         !!                                    the second node present on this PE, and so on.
         !! \endcode
         integer(ESMF_KIND_I4), allocatable :: owned_to_present_nodes(:)
+        !> \details The directory where the files are located
+        character(len=:), allocatable      :: dir_name
     end type meshdata
 
     !>
@@ -65,12 +67,12 @@ module ADCIRC_interpolation
     !! This structure stores the data from an ADCIRC hotstart file. To know more about
     !! different members of this stucture, consult ADCIRC manual or user refernce.
     type hotdata
-        real(kind=8)                 :: TimeLoc
-        real(kind=8), allocatable    :: ETA1(:), ETA2(:), ETADisc(:), UU2(:), VV2(:), CH1(:)
-        integer, allocatable         :: NNODECODE(:), NOFF(:)
-        integer                      :: InputFileFmtVn, IMHS, ITHS, NP_G_IN, NE_G_IN, NP_A_IN, NE_A_IN, &
-                                        IESTP, NSCOUE, IVSTP, NSCOUV, ICSTP, NSCOUC, IPSTP, IWSTP, NSCOUM, IGEP, NSCOUGE, IGVP, &
-                                        NSCOUGV, IGCP, NSCOUGC, IGPP, IGWP, NSCOUGW
+        real(ESMF_KIND_R8)                 :: TimeLoc
+        real(ESMF_KIND_R8), allocatable    :: ETA1(:), ETA2(:), ETADisc(:), UU2(:), VV2(:), CH1(:), realNODECODE(:)
+        integer(ESMF_KIND_I4), allocatable :: NNODECODE(:), NOFF(:)
+        integer(ESMF_KIND_I4)              :: InputFileFmtVn, IMHS, ITHS, NP_G_IN, NE_G_IN, NP_A_IN, NE_A_IN, &
+                                              IESTP, NSCOUE, IVSTP, NSCOUV, ICSTP, NSCOUC, IPSTP, IWSTP, NSCOUM, IGEP, NSCOUGE, IGVP, &
+                                              NSCOUGV, IGCP, NSCOUGC, IGPP, IGWP, NSCOUGW
     end type
 
     !>
@@ -94,8 +96,8 @@ contains
         implicit none
         type(ESMF_Mesh), intent(out)                  :: out_esmf_mesh
         type(meshdata), intent(in)                    :: the_data
-        integer, parameter                            :: dim1=2, spacedim=2, NumND_per_El=3
-        integer                                       :: rc
+        integer(ESMF_KIND_I4), parameter              :: dim1=2, spacedim=2, NumND_per_El=3
+        integer(ESMF_KIND_I4)                         :: rc
         out_esmf_mesh=ESMF_MeshCreate(parametricDim=dim1, spatialDim=spacedim, &
             nodeIDs=the_data%NdIDs, nodeCoords=the_data%NdCoords, &
             nodeOwners=the_data%NdOwners, elementIDs=the_data%ElIDs, &
@@ -116,8 +118,8 @@ contains
         type(ESMF_Mesh), intent(out)       :: out_maked_esmf_mesh
         type(meshdata), intent(in)         :: in_meshdata
         integer(ESMF_KIND_I4), intent(in)  :: mask_array(:)
-        integer, parameter                 :: dim1=2, spacedim=2, NumND_per_El=3
-        integer                            :: rc
+        integer(ESMF_KIND_I4), parameter   :: dim1=2, spacedim=2, NumND_per_El=3
+        integer(ESMF_KIND_I4)              :: rc
         out_maked_esmf_mesh=ESMF_MeshCreate(parametricDim=dim1, spatialDim=spacedim, &
             nodeIDs=in_meshdata%NdIDs, nodeCoords=in_meshdata%NdCoords, &
             nodeOwners=in_meshdata%NdOwners, elementIDs=in_meshdata%ElIDs, &
@@ -145,13 +147,21 @@ contains
         character(len=*), intent(in)          :: global_fort14_dir
         character(len=6)                      :: PE_ID, garbage1
         character(len=200)                    :: fort14_filename, fort18_filename, partmesh_filename
-        integer                               :: i1, j1, i_num, localPet, petCount, num_global_nodes, garbage2, garbage3
-        integer, allocatable                  :: local_node_numbers(:), local_elem_numbers(:), node_owner(:)
-        integer, parameter                    :: dim1=2, NumND_per_El=3
+        integer(ESMF_KIND_I4)                 :: i1, j1, i_num, localPet, petCount, num_global_nodes, &
+                                                 garbage2, garbage3, iNum, dir_name_length
+        logical                               :: iOpen, iExist
+        integer(ESMF_KIND_I4), allocatable    :: local_node_numbers(:), local_elem_numbers(:), node_owner(:)
+        integer(ESMF_KIND_I4), parameter      :: dim1=2, NumND_per_El=3
 
         the_data%vm = vm
         call ESMF_VMGet(vm=vm, localPet=localPet, petCount=petCount)
         write(PE_ID, "(A,I4.4)") "PE", localPet
+        !
+        dir_name_length = len_trim(global_fort14_dir)
+        allocate(character(len=dir_name_length)::the_data%dir_name)
+        the_data%dir_name = trim(global_fort14_dir)
+        if (localPet == 0) print *, "looking for global fort.14 in the directory: ", the_data%dir_name, "..."
+        !
         fort14_filename = trim(global_fort14_dir//PE_ID//"/fort.14")
         fort18_filename = trim(global_fort14_dir//PE_ID//"/fort.18")
         partmesh_filename = trim(global_fort14_dir//"/partmesh.txt")
@@ -159,6 +169,11 @@ contains
         open(unit=14, file=fort14_filename, form='FORMATTED', status='OLD', action='READ')
         open(unit=18, file=fort18_filename, form='FORMATTED', status='OLD', action='READ')
         open(unit=100, file=partmesh_filename, form='FORMATTED', status='OLD', action='READ')
+
+        inquire(FILE=fort14_filename, opened=iOpen, exist=iExist, number=iNum)
+        if (.not.iExist) then
+            print *, "fort.14 file is not found. I tried to access file in: ", fort14_filename
+        endif
 
         read(unit=14, fmt=*)
         read(unit=14, fmt=*) the_data%NumEl, the_data%NumNd
@@ -238,12 +253,12 @@ contains
     !! write something to this \c vtu file.
     subroutine write_meshdata_to_vtu(the_data, vtu_filename, last_write)
         implicit none
-        type(meshdata), intent(in)     :: the_data
-        character(len=*), intent(in)   :: vtu_filename
-        integer                        :: localPet, petCount
-        logical, intent(in)            :: last_write
-        integer                        :: i1, indent, offset_counter, rc
-        integer, parameter             :: dim1=2, spacedim=2, NumND_per_El=3, vtk_triangle=5
+        type(meshdata), intent(in)       :: the_data
+        character(len=*), intent(in)     :: vtu_filename
+        integer(ESMF_KIND_I4)            :: localPet, petCount
+        logical, intent(in)              :: last_write
+        integer(ESMF_KIND_I4)            :: i1, indent, offset_counter, rc, indent2
+        integer(ESMF_KIND_I4), parameter :: dim1=2, spacedim=2, NumND_per_El=3, vtk_triangle=5
         indent = 0
 
         call ESMF_VMGet(vm=the_data%vm, localPet=localPet, petCount=petCount, rc=rc)
@@ -255,7 +270,7 @@ contains
         open(unit=1014, file=vtu_filename, form='FORMATTED', &
             status='UNKNOWN', action='WRITE')
         write(unit=1014, fmt="(A,A)") '<VTKFile type="UnstructuredGrid"', &
-            ' version="0.1" byte_order="BigEndian">'
+            ' version="0.1" byte_order="LittleEndian">'
         indent = indent + 2
         write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
             "<UnstructuredGrid>"
@@ -272,10 +287,14 @@ contains
             '<DataArray type="Float32" NumberOfComponents="3" Format="ascii">'
         indent = indent + 2
         do i1 = 1, the_data%NumNd, 1
-            write(unit=1014, fmt="(A,F0.4,' ',F0.4,' ',F0.4,' ')") repeat(" ",indent), &
+            indent2 = 1
+            if (i1 == 1) then; indent2 = indent; endif
+            write(unit=1014, fmt="(A,F0.4,' ',F0.4,' ',F0.4,' ')", advance='no') &
+                repeat(" ",indent2), &
                 the_data%NdCoords((i1-1)*dim1 + 1), &
                 the_data%NdCoords((i1-1)*dim1 + 2), 0.0
         end do
+        write(unit=1014, fmt="(A)") ""
         indent = indent - 2
         write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
             '</DataArray>'
@@ -290,11 +309,15 @@ contains
             '<DataArray type="Int32" Name="connectivity" Format="ascii">'
         indent = indent + 2
         do i1 = 1, the_data%NumEl, 1
-            write(unit=1014, fmt="(A,I0,' ',I0,' ',I0,' ')") repeat(" ",indent),&
+            indent2 = 1
+            if (i1 == 1) then; indent2 = indent; endif
+            write(unit=1014, fmt="(A,I0,' ',I0,' ',I0,' ')", advance='no') &
+                repeat(" ",indent2), &
                 the_data%ElConnect((i1-1)*NumND_per_El+1)-1, &
                 the_data%ElConnect((i1-1)*NumND_per_El+2)-1, &
                 the_data%ElConnect((i1-1)*NumND_per_El+3)-1
         end do
+        write(unit=1014, fmt="(A)") ""
         indent = indent - 2
         write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
             '</DataArray>'
@@ -303,10 +326,13 @@ contains
         indent = indent + 2
         offset_counter = 0
         do i1 = 1, the_data%NumEl, 1
+            indent2 = 1
+            if (i1 == 1) then; indent2 = indent; endif
             offset_counter = offset_counter + 3
-            write(unit=1014, fmt="(A,I0)") repeat(" ",indent), &
+            write(unit=1014, fmt="(A,I0)", advance='no') repeat(" ",indent2), &
                 offset_counter
         end do
+        write(unit=1014, fmt="(A)") ""
         indent = indent - 2
         write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
             '</DataArray>'
@@ -314,9 +340,12 @@ contains
             '<DataArray type="Int32" Name="types" Format="ascii">'
         indent = indent + 2
         do i1=1, the_data%NumEl, 1
-            write(unit=1014, fmt="(A,I2)") repeat(" ",indent), &
-                vtk_triangle
+            indent2 = 1
+            if (i1 == 1) then; indent2 = indent; endif
+            write(unit=1014, fmt="(A,I2)", advance='no') &
+                repeat(" ",indent2), vtk_triangle
         end do
+        write(unit=1014, fmt="(A)") ""
         indent = indent - 2
         write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
             '</DataArray>'
@@ -331,8 +360,12 @@ contains
             '<DataArray type="Int32" Name="subdomain_id" NumberOfComponents="1" Format="ascii">'
         indent = indent + 2
         do i1 = 1, the_data%NumEl, 1
-            write(unit=1014, fmt="(A,I0)") repeat(" ",indent), localPet
+            indent2 = 1
+            if (i1 == 1) then; indent2 = indent; endif
+            write(unit=1014, fmt="(A,I0)", advance='no') &
+                repeat(" ",indent2), localPet
         end do
+        write(unit=1014, fmt="(A)") ""
         indent = indent - 2
         write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
             '</DataArray>'
@@ -347,9 +380,13 @@ contains
             '<DataArray type="Float32" Name="bathymetry" NumberOfComponents="1" Format="ascii">'
         indent = indent + 2
         do i1 = 1, the_data%NumNd, 1
-            write(unit=1014, fmt="(A,F0.4)") repeat(" ",indent), &
+            indent2 = 1
+            if (i1 == 1) then; indent2 = indent; endif
+            write(unit=1014, fmt="(A,F0.4)", advance='no') &
+                repeat(" ",indent2), &
                 the_data%bathymetry(i1)
         end do
+        write(unit=1014, fmt="(A)") ""
         indent = indent - 2
         write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
             '</DataArray>'
@@ -380,7 +417,7 @@ contains
         character(len=*), intent(in)   :: vtu_filename, field_name
         logical, intent(in)            :: last_write
         real(ESMF_KIND_R8), intent(in) :: field_array(:)
-        integer                        :: i1, indent, num_recs
+        integer(ESMF_KIND_I4)          :: i1, indent, indent2, num_recs
         open(unit=1014, file=vtu_filename, form='FORMATTED', &
             position='APPEND', status='OLD', action='WRITE')
 
@@ -390,8 +427,58 @@ contains
         indent = indent + 2
         num_recs = size(field_array)
         do i1 = 1, num_recs, 1
-            write(unit=1014, fmt="(A,F0.4)") repeat(" ",indent), field_array(i1)
+            indent2 = 1
+            if (i1 == 1) then ; indent2 = indent ; endif
+            write(unit=1014, fmt="(A,F0.4)", advance = 'no') &
+                repeat(" ",indent2), field_array(i1)
         end do
+        write(unit=1014, fmt="(A)") ""
+        indent = indent - 2
+        write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
+            '</DataArray>'
+
+        if (last_write) then
+            indent = indent - 2
+            write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
+                '</PointData>'
+            indent = indent - 2
+            write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
+                '</Piece>'
+            indent = indent - 2
+            write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
+                '</UnstructuredGrid>'
+            indent = indent - 2
+            write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
+                '</VTKFile>'
+        end if
+        close(1014)
+    end subroutine
+
+    !> \details This function writes the input array (\c field_array) and its name (\c field_name)
+    !! to the vtu file (which should already exist and not closed). Refer to write_meshdata_to_vtu()
+    !! to know more about opening vtu file and closing them. If the parameter \c last_write is true
+    !! then we close this file and as such we should not write anything else on this file.
+    subroutine write_int_node_field_to_vtu(field_array, field_name, vtu_filename, last_write)
+        implicit none
+        character(len=*), intent(in)      :: vtu_filename, field_name
+        logical, intent(in)               :: last_write
+        integer(ESMF_KIND_I4), intent(in) :: field_array(:)
+        integer(ESMF_KIND_I4)             :: i1, indent, indent2, num_recs
+        open(unit=1014, file=vtu_filename, form='FORMATTED', &
+            position='APPEND', status='OLD', action='WRITE')
+
+        indent = 8
+        write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
+            '<DataArray type="Int32" Name="'//field_name//'" NumberOfComponents="1" Format="ascii">'
+        indent = indent + 2
+        num_recs = size(field_array)
+        do i1 = 1, num_recs, 1
+            indent2 = 1
+            if (i1 == 1) then ; indent2 = indent ; endif
+            write(unit=1014, fmt="(A,I4)", advance = 'no') &
+                repeat(" ",indent2), field_array(i1)
+        end do
+        write(unit=1014, fmt="(A)") ""
         indent = indent - 2
         write(unit=1014, fmt="(A,A)") repeat(" ",indent), &
             '</DataArray>'
@@ -421,8 +508,8 @@ contains
         implicit none
         type(meshdata), intent(inout)         :: the_data
         character(len=*), intent(in)          :: fort14_filename
-        integer                               :: i1, i_num
-        integer, parameter                    :: dim1=2, spacedim=2, NumND_per_El=3
+        integer(ESMF_KIND_I4)                 :: i1, i_num
+        integer(ESMF_KIND_I4), parameter      :: dim1=2, spacedim=2, NumND_per_El=3
 
         open(unit=14, file=fort14_filename, form='FORMATTED', status='OLD', action='READ')
         read(unit=14, fmt=*)
@@ -455,28 +542,30 @@ contains
     !! gather their elements into an array (\c out_fieldarray) in \c PE=root. For this
     !! process we use an ESMF_VM which is given to this function as an input. Since, MPI_Gather
     !! is collective this function should also be called collectively.
-    subroutine gather_datafield_on_root(vm1, fieldarray, root, num_total_nodes, out_fieldarray)
+    subroutine gather_int_datafield_on_root(vm1, fieldarray, root, out_fieldarray, dir_name)
         implicit none
 
-        type(ESMF_VM), intent(in)                       :: vm1
-        real(ESMF_KIND_R8), pointer, intent(in)         :: fieldarray(:)
-        real(ESMF_KIND_R8), pointer, intent(out)        :: out_fieldarray(:)
-        integer, intent(in)                             :: root, num_total_nodes
-        integer                                         :: send_count, localPet, petCount, &
-                                                           i1, j1, k1, i_num, j_num1, rc, trash2, trash3
-        integer, allocatable                            :: recv_counts(:), gather_displs(:)
-        real(ESMF_KIND_R8), allocatable                 :: temp_fieldarray(:)
-        character(len=6)                                :: PE_ID
-        character(len=4)                                :: trash1
+        type(ESMF_VM), intent(in)                         :: vm1
+        integer(ESMF_KIND_I4), allocatable, intent(in)    :: fieldarray(:)
+        integer(ESMF_KIND_I4), allocatable, intent(inout) :: out_fieldarray(:)
+        integer(ESMF_KIND_I4), intent(in)                 :: root
+        character(len=*), intent(in)                      :: dir_name
+        integer(ESMF_KIND_I4)                             :: send_count, localPet, petCount, num_total_nodes, &
+                                                             i1, j1, k1, i_num, j_num1, rc, trash2, trash3
+        integer(ESMF_KIND_I4), allocatable                :: recv_counts(:), gather_displs(:)
+        integer(ESMF_KIND_I4), pointer                    :: temp_fieldarray(:)
+        character(len=6)                                  :: PE_ID
+        character(len=4)                                  :: trash1
 
         call ESMF_VMGet(vm=vm1, localPet=localPet, petCount=petCount, rc=rc)
         send_count = size(fieldarray)
+        num_total_nodes = size(out_fieldarray)
         if (localPet == root) then
             allocate(recv_counts(petCount))
             allocate(gather_displs(petCount))
             gather_displs(1) = 0
             recv_counts = 0
-            open(unit=100, file="fine/partmesh.txt", form='FORMATTED', &
+            open(unit=100, file=dir_name//"/partmesh.txt", form='FORMATTED', &
                 status='OLD', action='READ')
             do i1 = 1, num_total_nodes, 1
                 read(100,*) i_num
@@ -486,7 +575,75 @@ contains
                 gather_displs(i1) = gather_displs(i1-1) + recv_counts(i1-1)
             end do
             allocate(temp_fieldarray(num_total_nodes))
-            allocate(out_fieldarray(num_total_nodes))
+            close(100)
+        end if
+        !
+        call MPI_Gatherv(fieldarray, send_count, MPI_INTEGER, &
+            temp_fieldarray, recv_counts, gather_displs, MPI_INTEGER, &
+            root, MPI_COMM_WORLD, rc)
+        !
+        if (localPet == 0) print *, "gathered on root: ", rc
+
+        if (localPet == 0) then
+            do i1 = 1, petCount, 1
+                write(PE_ID, "(A,I4.4)") 'PE', i1-1
+                open(unit=18, file=dir_name//PE_ID//"/fort.18", form='FORMATTED', &
+                    status='OLD', action='READ')
+                read(unit=18, fmt=*)
+                read(unit=18, fmt=*) trash1, trash2, trash3, i_num
+                do j1 = 1, i_num, 1
+                    read(unit=18, fmt=*)
+                end do
+                k1 = 0
+                read(unit=18, fmt=*) trash1, trash2, trash3, i_num
+                do j1 = 1, i_num, 1
+                    read(unit=18, fmt=*) j_num1
+                    if (j_num1 > 0) then
+                        k1 = k1 + 1
+                        out_fieldarray(j_num1) = temp_fieldarray(gather_displs(i1)+k1)
+                    end if
+                end do
+            end do
+        end if
+    end subroutine
+
+    !> \details Given a local array in each PE i.e. \c fieldarray, we use MPI_Gather method to
+    !! gather their elements into an array (\c out_fieldarray) in \c PE=root. For this
+    !! process we use an ESMF_VM which is given to this function as an input. Since, MPI_Gather
+    !! is collective this function should also be called collectively.
+    subroutine gather_datafield_on_root(vm1, fieldarray, root, out_fieldarray, dir_name)
+        implicit none
+
+        type(ESMF_VM), intent(in)                       :: vm1
+        real(ESMF_KIND_R8), allocatable, intent(in)     :: fieldarray(:)
+        real(ESMF_KIND_R8), intent(inout)               :: out_fieldarray(:)
+        integer(ESMF_KIND_I4), intent(in)               :: root
+        character(len=*), intent(in)                    :: dir_name
+        integer(ESMF_KIND_I4)                           :: send_count, localPet, petCount, num_total_nodes, &
+                                                           i1, j1, k1, i_num, j_num1, rc, trash2, trash3
+        integer(ESMF_KIND_I4), allocatable              :: recv_counts(:), gather_displs(:)
+        real(ESMF_KIND_R8), allocatable                 :: temp_fieldarray(:)
+        character(len=6)                                :: PE_ID
+        character(len=4)                                :: trash1
+
+        call ESMF_VMGet(vm=vm1, localPet=localPet, petCount=petCount, rc=rc)
+        send_count = size(fieldarray)
+        num_total_nodes = size(out_fieldarray)
+        if (localPet == root) then
+            allocate(recv_counts(petCount))
+            allocate(gather_displs(petCount))
+            gather_displs(1) = 0
+            recv_counts = 0
+            open(unit=100, file=dir_name//"/partmesh.txt", form='FORMATTED', &
+                status='OLD', action='READ')
+            do i1 = 1, num_total_nodes, 1
+                read(100,*) i_num
+                recv_counts(i_num) = recv_counts(i_num) + 1
+            end do
+            do i1 = 2, petCount, 1
+                gather_displs(i1) = gather_displs(i1-1) + recv_counts(i1-1)
+            end do
+            allocate(temp_fieldarray(num_total_nodes))
             close(100)
         end if
 
@@ -498,7 +655,7 @@ contains
         if (localPet == 0) then
             do i1 = 1, petCount, 1
                 write(PE_ID, "(A,I4.4)") 'PE', i1-1
-                open(unit=18, file="fine/"//PE_ID//"/fort.18", form='FORMATTED', &
+                open(unit=18, file=dir_name//PE_ID//"/fort.18", form='FORMATTED', &
                     status='OLD', action='READ')
                 read(unit=18, fmt=*)
                 read(unit=18, fmt=*) trash1, trash2, trash3, i_num
@@ -521,48 +678,118 @@ contains
     !>
     !!
     !!
-    subroutine gather_nodal_hotdata_on_root(localized_hotdata, global_hotdata, &
+    subroutine gather_dst_nodal_hotdata_on_root(localized_hotdata, global_hotdata, &
             localized_meshdata, global_meshdata, root)
         implicit none
-        real(ESMF_KIND_R8), pointer       :: localfieldarray_ptr(:), globalfieldarray_ptr(:)
-        type(hotdata), intent(in)         :: localized_hotdata
-        type(hotdata), intent(inout)      :: global_hotdata
-        type(meshdata), intent(in)        :: localized_meshdata
-        type(meshdata), intent(in)        :: global_meshdata
-        integer                           :: root, localPet, petCount, rc
+        real(ESMF_KIND_R8), allocatable     :: localfieldarray_ptr(:), globalfieldarray_ptr(:)
+        integer(ESMF_KIND_I4), allocatable  :: int_localfieldarray_ptr(:), int_globalfieldarray_ptr(:)
+        type(hotdata), intent(in)           :: localized_hotdata
+        type(hotdata), intent(inout)        :: global_hotdata
+        type(meshdata), intent(in)          :: localized_meshdata
+        type(meshdata), intent(in)          :: global_meshdata
+        integer(ESMF_KIND_I4)               :: root, localPet, petCount, rc
 
         call ESMF_VMGet(vm=localized_meshdata%vm, localPet=localPet, petCount=petCount, rc=rc)
         allocate(localfieldarray_ptr(localized_meshdata%NumOwnedNd))
+        allocate(int_localfieldarray_ptr(localized_meshdata%NumOwnedNd))
+        if (localPet == root) then
+            allocate(globalfieldarray_ptr(global_meshdata%NumNd))
+            allocate(int_globalfieldarray_ptr(global_meshdata%NumNd))
+        end if
 
         localfieldarray_ptr = localized_hotdata%ETA1
         call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
-            root, global_meshdata%NumNd, globalfieldarray_ptr)
+            root, globalfieldarray_ptr, localized_meshdata%dir_name)
         if (localPet == root) global_hotdata%ETA1 = globalfieldarray_ptr
         !
         localfieldarray_ptr = localized_hotdata%ETA2
         call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
-            root, global_meshdata%NumNd, globalfieldarray_ptr)
+            root, globalfieldarray_ptr, localized_meshdata%dir_name)
         if (localPet == root) global_hotdata%ETA2 = globalfieldarray_ptr
         !
         localfieldarray_ptr = localized_hotdata%ETADisc
         call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
-            root, global_meshdata%NumNd, globalfieldarray_ptr)
+            root, globalfieldarray_ptr, localized_meshdata%dir_name)
         if (localPet == root) global_hotdata%ETADisc = globalfieldarray_ptr
         !
         localfieldarray_ptr = localized_hotdata%UU2
         call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
-            root, global_meshdata%NumNd, globalfieldarray_ptr)
+            root, globalfieldarray_ptr, localized_meshdata%dir_name)
         if (localPet == root) global_hotdata%UU2 = globalfieldarray_ptr
         !
         localfieldarray_ptr = localized_hotdata%VV2
         call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
-            root, global_meshdata%NumNd, globalfieldarray_ptr)
+            root, globalfieldarray_ptr, localized_meshdata%dir_name)
         if (localPet == root) global_hotdata%VV2 = globalfieldarray_ptr
         !
         localfieldarray_ptr = localized_hotdata%CH1
         call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
-            root, global_meshdata%NumNd, globalfieldarray_ptr)
+            root, globalfieldarray_ptr, localized_meshdata%dir_name)
         if (localPet == root) global_hotdata%CH1 = globalfieldarray_ptr
+        !
+        int_localfieldarray_ptr = localized_hotdata%NNODECODE
+        call gather_int_datafield_on_root(localized_meshdata%vm, int_localfieldarray_ptr, &
+            root, int_globalfieldarray_ptr, localized_meshdata%dir_name)
+        if (localPet == root) global_hotdata%NNODECODE = int_globalfieldarray_ptr
+    end subroutine
+
+    !>
+    !!
+    !!
+    subroutine gather_src_nodal_hotdata_on_root(localized_hotdata, global_hotdata, &
+            localized_meshdata, global_meshdata, root)
+        implicit none
+        real(ESMF_KIND_R8), allocatable     :: localfieldarray_ptr(:), globalfieldarray_ptr(:)
+        integer(ESMF_KIND_I4), allocatable  :: int_localfieldarray_ptr(:), int_globalfieldarray_ptr(:)
+        type(hotdata), intent(in)           :: localized_hotdata
+        type(hotdata), intent(inout)        :: global_hotdata
+        type(meshdata), intent(in)          :: localized_meshdata
+        type(meshdata), intent(in)          :: global_meshdata
+        integer(ESMF_KIND_I4)               :: root, localPet, petCount, rc, i1
+
+        call ESMF_VMGet(vm=localized_meshdata%vm, localPet=localPet, petCount=petCount, rc=rc)
+        allocate(localfieldarray_ptr(localized_meshdata%NumOwnedNd))
+        allocate(int_localfieldarray_ptr(localized_meshdata%NumOwnedNd))
+        if (localPet == root) then
+            allocate(globalfieldarray_ptr(global_meshdata%NumNd))
+            allocate(int_globalfieldarray_ptr(global_meshdata%NumNd))
+        end if
+
+        localfieldarray_ptr(:) = localized_hotdata%ETA1(localized_meshdata%owned_to_present_nodes(:))
+        call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
+            root, globalfieldarray_ptr, localized_meshdata%dir_name)
+        if (localPet == root) global_hotdata%ETA1 = globalfieldarray_ptr
+        !
+        localfieldarray_ptr(:) = localized_hotdata%ETA2(localized_meshdata%owned_to_present_nodes(:))
+        call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
+            root, globalfieldarray_ptr, localized_meshdata%dir_name)
+        if (localPet == root) global_hotdata%ETA2 = globalfieldarray_ptr
+        !
+        localfieldarray_ptr(:) = localized_hotdata%ETADisc(localized_meshdata%owned_to_present_nodes(:))
+        call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
+            root, globalfieldarray_ptr, localized_meshdata%dir_name)
+        if (localPet == root) global_hotdata%ETADisc = globalfieldarray_ptr
+        !
+        localfieldarray_ptr(:) = localized_hotdata%UU2(localized_meshdata%owned_to_present_nodes(:))
+        call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
+            root, globalfieldarray_ptr, localized_meshdata%dir_name)
+        if (localPet == root) global_hotdata%UU2 = globalfieldarray_ptr
+        !
+        localfieldarray_ptr(:) = localized_hotdata%VV2(localized_meshdata%owned_to_present_nodes(:))
+        call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
+            root, globalfieldarray_ptr, localized_meshdata%dir_name)
+        if (localPet == root) global_hotdata%VV2 = globalfieldarray_ptr
+        !
+        localfieldarray_ptr(:) = localized_hotdata%CH1(localized_meshdata%owned_to_present_nodes(:))
+        call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
+            root, globalfieldarray_ptr, localized_meshdata%dir_name)
+        if (localPet == root) global_hotdata%CH1 = globalfieldarray_ptr
+        !
+        int_localfieldarray_ptr(:) = localized_hotdata%NNODECODE(localized_meshdata%owned_to_present_nodes(:))
+        call gather_int_datafield_on_root(localized_meshdata%vm, int_localfieldarray_ptr, &
+            root, int_globalfieldarray_ptr, localized_meshdata%dir_name)
+        if (localPet == root) global_hotdata%NNODECODE = int_globalfieldarray_ptr
+
     end subroutine
 
     !>
@@ -574,7 +801,7 @@ contains
         type(hotdata), intent(out)   :: the_hotdata
         character(len=*), intent(in) :: global_fort14_dir
         logical, intent(in)          :: write_ascii
-        integer                      :: i1, localPet, petCount, rc, ihotstp
+        integer(ESMF_KIND_I4)        :: i1, localPet, petCount, rc, ihotstp
         character(len=6)             :: PE_ID
         character(len=200)           :: fort67_filename, fort67_ascii_filename
 
@@ -631,6 +858,7 @@ contains
         end if
         do i1 = 1, the_meshdata%NumNd, 1
             read(unit=67, REC=ihotstp) the_hotdata%NNODECODE(i1)
+            the_hotdata%realNODECODE(i1) = dble(the_hotdata%NNODECODE(i1))
             ihotstp=ihotstp+1
         end do
         do i1 = 1, the_meshdata%NumEl, 1
@@ -714,7 +942,7 @@ contains
         type(hotdata), intent(in)    :: the_hotdata
         character(len=*), intent(in) :: global_fort14_dir
         logical, intent(in)          :: write_ascii
-        integer                      :: i1, rc, ihotstp
+        integer(ESMF_KIND_I4)        :: i1, rc, ihotstp
         character(len=200)           :: fort67_filename, fort67_ascii_filename
 
         fort67_filename = trim(global_fort14_dir//"/fort.67")
@@ -851,6 +1079,7 @@ contains
         allocate(the_hotdata%UU2(the_meshdata%NumNd))
         allocate(the_hotdata%VV2(the_meshdata%NumNd))
         allocate(the_hotdata%CH1(the_meshdata%NumNd))
+        allocate(the_hotdata%realNODECODE(the_meshdata%NumNd))
         allocate(the_hotdata%NNODECODE(the_meshdata%NumNd))
         allocate(the_hotdata%NOFF(the_meshdata%NumEl))
     end subroutine
@@ -860,7 +1089,8 @@ contains
         type(regrid_data), intent(inout)    :: the_regrid_data
         type(meshdata)                      :: src_data, dst_data
         real(ESMF_KIND_R8), intent(in)      :: src_array_of_present_nodes(:)
-        integer                             :: i1, localPet, petCount, rc
+        integer(ESMF_KIND_I4)               :: i1, localPet, petCount, rc
+
         call ESMF_VMGet(vm=src_data%vm, localPet=localPet, petCount=petCount, rc=rc)
         do i1 = 1, src_data%NumOwnedNd, 1
             the_regrid_data%src_fieldptr(i1) = src_array_of_present_nodes(src_data%owned_to_present_nodes(i1))
@@ -1128,13 +1358,13 @@ program main
     use ADCIRC_interpolation
 
     implicit none
-    real(ESMF_KIND_R8), pointer   :: global_fieldptr(:)
+    real(ESMF_KIND_R8), pointer   :: global_fieldptr(:), aux_global_fieldptr(:)
     type(ESMF_VM)                 :: vm1
     type(meshdata)                :: src_data, dst_data, global_src_data, global_dst_data
-    type(hotdata)                 :: src_hotdata, dst_hotdata, global_dst_hotdata
+    type(hotdata)                 :: src_hotdata, dst_hotdata, global_dst_hotdata, global_src_hotdata
     type(regrid_data)             :: the_regrid_data
     type(ESMF_Mesh)               :: src_mesh, dst_mesh
-    integer                       :: i1, rc, localPet, petCount
+    integer(ESMF_KIND_I4)         :: i1, rc, localPet, petCount
     character(len=6)              :: PE_ID
     character(len=*), parameter   :: src_fort14_dir = "coarse/", dst_fort14_dir = "fine/"
 
@@ -1157,8 +1387,10 @@ program main
     call create_parallel_esmf_mesh_from_meshdata(src_data, src_mesh)
     call extract_parallel_data_from_mesh(vm1, dst_fort14_dir, dst_data)
     call create_parallel_esmf_mesh_from_meshdata(dst_data, dst_mesh)
-    call write_meshdata_to_vtu(src_data, PE_ID//"_src_mesh.vtu", .true.)
-    call write_meshdata_to_vtu(dst_data, PE_ID//"_dst_mesh.vtu", .true.)
+
+    ! I will replace this with preprocessor directives.
+    !    call write_meshdata_to_vtu(src_data, PE_ID//"_src_mesh.vtu", .true.)
+    !    call write_meshdata_to_vtu(dst_data, PE_ID//"_dst_mesh.vtu", .true.)
 
     !
     ! Now, let us read data from fort.67. We also allocate the hotdata structure for
@@ -1167,8 +1399,6 @@ program main
     call extract_hotdata_from_parallel_binary_fort_67(src_data, src_hotdata, &
         src_fort14_dir, .true.)
     call allocate_hotdata(dst_hotdata, dst_data)
-    if (localPet == 0) then
-    end if
 
     !
     ! After this point, we plan to overcome an important issue. The issue is
@@ -1199,7 +1429,7 @@ program main
     !
     ! This is the preferred procedure in using ESMF to get a pointer to the
     ! ESMF_Field data array, and use that pointer for creating the mask, or
-    ! assigning the data to field.
+    ! assigning the data to field. ESMF_FieldGet also allocates the farrayptr
     !
     call ESMF_FieldGet(the_regrid_data%src_datafield, &
         farrayPtr=the_regrid_data%src_fieldptr, rc=rc)
@@ -1259,26 +1489,38 @@ program main
     call regrid_datafield_of_present_nodes(the_regrid_data, src_data, dst_data, src_hotdata%CH1)
     dst_hotdata%CH1 = the_regrid_data%mapped_fieldptr
 
+    call regrid_datafield_of_present_nodes(the_regrid_data, src_data, dst_data, src_hotdata%realNODECODE)
+    dst_hotdata%realNODECODE = the_regrid_data%mapped_fieldptr
+    dst_hotdata%NNODECODE = nint(dst_hotdata%realNODECODE)
+
+    if (localPet == 0) then
+        call extract_global_data_from_fort14(src_data%dir_name//"/fort.14", global_src_data)
+        call extract_global_data_from_fort14(dst_data%dir_name//"/fort.14", global_dst_data)
+        call allocate_hotdata(global_src_hotdata, global_src_data)
+        call allocate_hotdata(global_dst_hotdata, global_dst_data)
+
+    end if
+    call gather_src_nodal_hotdata_on_root(src_hotdata, global_src_hotdata, src_data, global_src_data, 0)
+    call gather_dst_nodal_hotdata_on_root(dst_hotdata, global_dst_hotdata, dst_data, global_dst_data, 0)
+
     !
     ! Finally, we want to visualize our results. This is not required in actual usage.
     ! We only do this for our presentation. So we write two meshes in the PE=0, and
     ! gather the interpolated field in PE=0. Then we plot these into vtu output.
     !
     if (localPet == 0) then
-        call extract_global_data_from_fort14("coarse/fort.14", global_src_data)
-        call extract_global_data_from_fort14("fine/fort.14", global_dst_data)
-        call allocate_hotdata(global_dst_hotdata, global_dst_data)
-
-        call write_meshdata_to_vtu(global_src_data, "coarse/global_mesh.vtu", .true.)
-        call write_meshdata_to_vtu(global_dst_data, "fine/global_mesh.vtu", .false.)
-    end if
-
-    call gather_nodal_hotdata_on_root(dst_hotdata, global_dst_hotdata, dst_data, global_dst_data, 0)
-
-    call gather_datafield_on_root(vm1, the_regrid_data%mapped_fieldptr, 0, global_dst_data%NumNd, &
-        global_fieldptr)
-    if (localPet == 0) then
-        call write_node_field_to_vtu(global_fieldptr, "interp_bath", "fine/global_mesh.vtu", .true.)
+        call write_meshdata_to_vtu(global_src_data, &
+            src_data%dir_name//"/global_mesh.vtu", .false.)
+        call write_meshdata_to_vtu(global_dst_data, &
+            dst_data%dir_name//"/global_mesh.vtu", .false.)
+        call write_int_node_field_to_vtu(global_src_hotdata%NNODECODE, &
+            "NODECODE", src_data%dir_name//"/global_mesh.vtu", .false.)
+        call write_node_field_to_vtu(global_src_hotdata%ETA1, &
+            "ETA1", src_data%dir_name//"/global_mesh.vtu", .true.)
+        call write_int_node_field_to_vtu(global_dst_hotdata%NNODECODE, &
+            "NODECODE", dst_data%dir_name//"/global_mesh.vtu", .false.)
+        call write_node_field_to_vtu(global_dst_hotdata%ETA1, &
+            "ETA1", dst_data%dir_name//"/global_mesh.vtu", .true.)
     end if
 
     !
@@ -1293,7 +1535,16 @@ program main
         global_dst_hotdata%NE_G_IN = global_dst_data%NumEl
         global_dst_hotdata%NP_A_IN = global_dst_data%NumNd
         global_dst_hotdata%NE_A_IN = global_dst_data%NumEl
-        global_dst_hotdata%NNODECODE = 1
+        !
+        ! By setting NNODECODE = 1, we consider that every node is a wet node,
+        ! and we let ADCIRC correct this assumption on those nodes that do not
+        ! satisfy the condition for a wet node. However, in Jan 2018, Jennifer
+        ! found that ADCIRC will not correct this assumption in flood plains.
+        ! So, we decided to interpolate NNODECODE along with other variables
+        ! (such as ETA, UU, VV, ...).
+        !
+        ! global_dst_hotdata%NNODECODE = 1
+        !
         global_dst_hotdata%NOFF = 1
         global_dst_hotdata%IESTP = 0
         global_dst_hotdata%NSCOUE = 0
@@ -1321,7 +1572,7 @@ program main
     ! Finally, we have to release the memory.
     !
     if (localPet == 0) then
-        deallocate(global_fieldptr)
+        !deallocate(global_fieldptr)
         call destroy_meshdata(global_dst_data)
         call destroy_meshdata(global_src_data)
     end if
@@ -1334,4 +1585,3 @@ program main
     call ESMF_Finalize()
 
 end program main
-
