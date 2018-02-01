@@ -60,6 +60,8 @@ module ADCIRC_interpolation
         integer(ESMF_KIND_I4), allocatable :: owned_to_present_nodes(:)
         !> \details The directory where the files are located
         character(len=:), allocatable      :: dir_name
+        !> \details This flag tells if the meshdata has been initialized
+        logical                            :: is_initialized = .false.
     end type meshdata
 
     !>
@@ -98,6 +100,12 @@ contains
         type(meshdata), intent(in)                    :: the_data
         integer(ESMF_KIND_I4), parameter              :: dim1=2, spacedim=2, NumND_per_El=3
         integer(ESMF_KIND_I4)                         :: rc
+
+        if (.not.the_data%is_initialized) then
+            print *, ". The mesh is not initialized before calling ", &
+                     "create_parallel_esmf_mesh_from_meshdata"
+            STOP
+        endif
         out_esmf_mesh=ESMF_MeshCreate(parametricDim=dim1, spatialDim=spacedim, &
             nodeIDs=the_data%NdIDs, nodeCoords=the_data%NdCoords, &
             nodeOwners=the_data%NdOwners, elementIDs=the_data%ElIDs, &
@@ -119,7 +127,14 @@ contains
         type(meshdata), intent(in)         :: in_meshdata
         integer(ESMF_KIND_I4), intent(in)  :: mask_array(:)
         integer(ESMF_KIND_I4), parameter   :: dim1=2, spacedim=2, NumND_per_El=3
-        integer(ESMF_KIND_I4)              :: rc
+        integer(ESMF_KIND_I4)              :: rc, localPet, petCount
+
+        call ESMF_VMGet(vm=in_meshdata%vm, localPet=localPet, petCount=petCount)
+        if (localPet == 0 .and. .not. in_meshdata%is_initialized) then
+            print *, "The mesh is not initialized before calling ", &
+                     "create_masked_esmf_mesh_from_data"
+            STOP
+        endif
         out_maked_esmf_mesh=ESMF_MeshCreate(parametricDim=dim1, spatialDim=spacedim, &
             nodeIDs=in_meshdata%NdIDs, nodeCoords=in_meshdata%NdCoords, &
             nodeOwners=in_meshdata%NdOwners, elementIDs=in_meshdata%ElIDs, &
@@ -160,20 +175,23 @@ contains
         dir_name_length = len_trim(global_fort14_dir)
         allocate(character(len=dir_name_length)::the_data%dir_name)
         the_data%dir_name = trim(global_fort14_dir)
-        if (localPet == 0) print *, "looking for global fort.14 in the directory: ", the_data%dir_name, "..."
         !
         fort14_filename = trim(global_fort14_dir//PE_ID//"/fort.14")
         fort18_filename = trim(global_fort14_dir//PE_ID//"/fort.18")
         partmesh_filename = trim(global_fort14_dir//"/partmesh.txt")
 
-        open(unit=14, file=fort14_filename, form='FORMATTED', status='OLD', action='READ')
-        open(unit=18, file=fort18_filename, form='FORMATTED', status='OLD', action='READ')
-        open(unit=100, file=partmesh_filename, form='FORMATTED', status='OLD', action='READ')
-
+        if (localPet == 0) then
+            print *, "looking for global fort.14 in the directory: ", the_data%dir_name, "..."
+        endif
         inquire(FILE=fort14_filename, opened=iOpen, exist=iExist, number=iNum)
         if (.not.iExist) then
             print *, "fort.14 file is not found. I tried to access file in: ", fort14_filename
+            STOP
         endif
+
+        open(unit=14, file=fort14_filename, form='FORMATTED', status='OLD', action='READ')
+        open(unit=18, file=fort18_filename, form='FORMATTED', status='OLD', action='READ')
+        open(unit=100, file=partmesh_filename, form='FORMATTED', status='OLD', action='READ')
 
         read(unit=14, fmt=*)
         read(unit=14, fmt=*) the_data%NumEl, the_data%NumNd
@@ -229,6 +247,7 @@ contains
             end if
         end do
         the_data%ElTypes = ESMF_MESHELEMTYPE_TRI
+        the_data%is_initialized = .true.
 
         close(14)
         close(18)
@@ -508,9 +527,19 @@ contains
         implicit none
         type(meshdata), intent(inout)         :: the_data
         character(len=*), intent(in)          :: fort14_filename
-        integer(ESMF_KIND_I4)                 :: i1, i_num
+        integer(ESMF_KIND_I4)                 :: i1, i_num, localPet, petCount, rc
         integer(ESMF_KIND_I4), parameter      :: dim1=2, spacedim=2, NumND_per_El=3
+        logical                               :: iOpen, iExist
 
+        call ESMF_VMGet(vm=the_data%vm, localPet=localPet, petCount=petCount, rc=rc)
+        if (localPet == 0) then
+            print *, "looking for global fort.14 in the directory: ", the_data%dir_name, "..."
+            inquire(FILE=fort14_filename, opened=iOpen, exist=iExist, number=i_num)
+            if (.not.iExist) then
+                print *, "fort.14 file is not found. I tried to access file in: ", fort14_filename
+                STOP
+            endif
+        endif
         open(unit=14, file=fort14_filename, form='FORMATTED', status='OLD', action='READ')
         read(unit=14, fmt=*)
         read(unit=14, fmt=*) the_data%NumEl, the_data%NumNd
@@ -558,6 +587,11 @@ contains
         character(len=4)                                  :: trash1
 
         call ESMF_VMGet(vm=vm1, localPet=localPet, petCount=petCount, rc=rc)
+        if (localPet == root) then
+            if (.not. allocated(fieldarray) .or. .not. allocated(out_fieldarray)) then
+                print *, "The input arrays into gather_int_datafield_on_root should be allocated."
+            end if
+        end if
         send_count = size(fieldarray)
         num_total_nodes = size(out_fieldarray)
         if (localPet == root) then
@@ -616,7 +650,7 @@ contains
 
         type(ESMF_VM), intent(in)                       :: vm1
         real(ESMF_KIND_R8), allocatable, intent(in)     :: fieldarray(:)
-        real(ESMF_KIND_R8), intent(inout)               :: out_fieldarray(:)
+        real(ESMF_KIND_R8), allocatable, intent(inout)  :: out_fieldarray(:)
         integer(ESMF_KIND_I4), intent(in)               :: root
         character(len=*), intent(in)                    :: dir_name
         integer(ESMF_KIND_I4)                           :: send_count, localPet, petCount, num_total_nodes, &
@@ -627,6 +661,11 @@ contains
         character(len=4)                                :: trash1
 
         call ESMF_VMGet(vm=vm1, localPet=localPet, petCount=petCount, rc=rc)
+        if (localPet == root) then
+            if (.not. allocated(fieldarray) .or. .not. allocated(out_fieldarray)) then
+                print *, "The input arrays into gather_datafield_on_root should be allocated."
+            end if
+        endif
         send_count = size(fieldarray)
         num_total_nodes = size(out_fieldarray)
         if (localPet == root) then
@@ -801,15 +840,23 @@ contains
         type(hotdata), intent(out)   :: the_hotdata
         character(len=*), intent(in) :: global_fort14_dir
         logical, intent(in)          :: write_ascii
-        integer(ESMF_KIND_I4)        :: i1, localPet, petCount, rc, ihotstp
+        integer(ESMF_KIND_I4)        :: i1, localPet, petCount, rc, ihotstp, iNum
         character(len=6)             :: PE_ID
         character(len=200)           :: fort67_filename, fort67_ascii_filename
+        logical                      :: iExist, iOpen
 
         call ESMF_VMGet(vm=the_meshdata%vm, localPet=localPet, petCount=petCount, rc=rc)
         call allocate_hotdata(the_hotdata, the_meshdata)
 
         write(PE_ID, "(A,I4.4)") "PE", localPet
         fort67_filename = trim(global_fort14_dir//PE_ID//"/fort.67")
+        inquire(FILE=fort67_filename, opened=iOpen, exist=iExist, number=iNum)
+        if (.not.iExist) then
+            print *, "parallel binary fort.67 file is not found. ", &
+                     "I tried to access file in: ", fort67_filename
+            STOP
+        endif
+
         open(unit=67, file=fort67_filename, action='READ', &
             access='DIRECT', recl=8, iostat=rc, status='OLD')
         ihotstp=1
@@ -1368,6 +1415,10 @@ program main
     character(len=6)              :: PE_ID
     character(len=*), parameter   :: src_fort14_dir = "coarse/", dst_fort14_dir = "fine/"
 
+#ifdef DEBUG_MODE
+    if (localPet == 0) print *, "This is adcirpolate, in debug mode."
+#endif
+
     !
     ! Any program using ESMF library should start with ESMF_Initialize(...).
     ! Next we get the ESMF_VM (virtual machine) and using this VM, we obtain
@@ -1516,12 +1567,24 @@ program main
         call write_int_node_field_to_vtu(global_src_hotdata%NNODECODE, &
             "NODECODE", src_data%dir_name//"/global_mesh.vtu", .false.)
         call write_node_field_to_vtu(global_src_hotdata%ETA1, &
-            "ETA1", src_data%dir_name//"/global_mesh.vtu", .true.)
+            "ETA1", src_data%dir_name//"/global_mesh.vtu", .false.)
+        call write_node_field_to_vtu(global_src_hotdata%ETA2, &
+            "ETA2", src_data%dir_name//"/global_mesh.vtu", .false.)
+        call write_node_field_to_vtu(global_src_hotdata%UU2, &
+            "UU2", src_data%dir_name//"/global_mesh.vtu", .false.)
+        call write_node_field_to_vtu(global_src_hotdata%VV2, &
+            "VV2", src_data%dir_name//"/global_mesh.vtu", .true.)
         call write_int_node_field_to_vtu(global_dst_hotdata%NNODECODE, &
             "NODECODE", dst_data%dir_name//"/global_mesh.vtu", .false.)
         call write_node_field_to_vtu(global_dst_hotdata%ETA1, &
-            "ETA1", dst_data%dir_name//"/global_mesh.vtu", .true.)
-    end if
+            "ETA1", dst_data%dir_name//"/global_mesh.vtu", .false.)
+        call write_node_field_to_vtu(global_src_hotdata%ETA2, &
+            "ETA2", src_data%dir_name//"/global_mesh.vtu", .false.)
+        call write_node_field_to_vtu(global_dst_hotdata%UU2, &
+            "UU2", dst_data%dir_name//"/global_mesh.vtu", .false.)
+        call write_node_field_to_vtu(global_dst_hotdata%VV2, &
+            "VV2", dst_data%dir_name//"/global_mesh.vtu", .true.)
+     end if
 
     !
     ! Now we write the hotstart mesh for the destination mesh.
@@ -1565,14 +1628,13 @@ program main
         global_dst_hotdata%IGWP = 0
         global_dst_hotdata%NSCOUGW = 0
         call write_serial_hotfile_to_fort_67(global_dst_data, global_dst_hotdata, &
-            dst_fort14_dir, .true.)
+            dst_fort14_dir, .false.)
     end if
 
     !
     ! Finally, we have to release the memory.
     !
     if (localPet == 0) then
-        !deallocate(global_fieldptr)
         call destroy_meshdata(global_dst_data)
         call destroy_meshdata(global_src_data)
     end if
