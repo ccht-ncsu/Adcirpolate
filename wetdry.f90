@@ -65,7 +65,7 @@ contains
             if ((in_hot_data%NNODECODE(nm1) .EQ. 1) .AND. (in_hot_data%NNODECODE(nm2) .EQ. 1)) then
                if ((HTOTN1 .GE. HOFF) .AND. (HTOTN2 .GE. HOFF)) then
                   nm123 = nm1
-!                  if (ETA2(nm2) .GT. ETA2(nm1)) nm123 = nm2
+                  if (in_hot_data%ETA2(nm2) .GT. in_hot_data%ETA2(nm1)) nm123 = nm2
 !                  DELDIST = SQRT((y(nm3) - y(nm123))**2.D0 &
 !                                 + (X(nm3) - X(nm123))**2.D0)
 !                  DELETA = ETA2(nm123) - ETA2(nm3)
@@ -356,12 +356,12 @@ contains
       type(meshdata), intent(in)               :: in_mesh_data
       type(hotdata), intent(inout)             :: in_hot_data
       real(ESMF_KIND_R8), intent(in)           :: h0
-      integer(ESMF_KIND_I4)                    :: i1, j1, el_connect(NumND_per_El), el_node_code(NumND_per_El)
+      integer(ESMF_KIND_I4)                    :: i1, j1, el_connect(NumND_per_El), el_node_code(NumND_per_El), sum_node_code
       !
       allocate (nibcnt(in_mesh_data%NumNd))
       allocate (noffold(in_mesh_data%NumEl))
       !
-      ! We set an element wet, if all of its nodes are wet
+      ! We set an element dry, if two of its nodes are dry.
       !
       nibcnt(:) = 0
       in_hot_data%NOFF(:) = 1
@@ -370,7 +370,8 @@ contains
             el_connect(j1) = in_mesh_data%ElConnect((i1 - 1)*NumND_per_El + j1)
             el_node_code(j1) = in_hot_data%NNODECODE(el_connect(j1))
          end do
-         if (el_node_code(1) /= 1 .OR. el_node_code(2) /= 1 .OR. el_node_code(3) /= 1) then
+         sum_node_code = sum(el_node_code)
+         if (sum_node_code < 3) then
             in_hot_data%NOFF(i1) = 0
          end if
       end do

@@ -1,6 +1,7 @@
 cmake_minimum_required (VERSION 2.8)
 project (adcirpolate Fortran)
 
+set (CMAKE_Fortan_COMPILER "mpif90")
 set (CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/CMakeModules")
 
 find_package (ESMF)

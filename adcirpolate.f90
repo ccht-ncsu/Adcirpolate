@@ -94,23 +94,23 @@ contains
    !! should be called prior to calling this function.
    !! \param the_data This the input meshdata object.
    !! \param out_esmf_mesh This is the ouput ESMF_Mesh object.
-   subroutine create_parallel_esmf_mesh_from_meshdata(the_data, out_esmf_mesh)
+   subroutine create_parallel_esmf_mesh_from_meshdata(the_data, out_esmf_mesh, out_rc)
       implicit none
       type(ESMF_Mesh), intent(out)                  :: out_esmf_mesh
+      integer, intent(out)                          :: out_rc
       type(meshdata), intent(in)                    :: the_data
       integer(ESMF_KIND_I4), parameter              :: dim1 = 2, spacedim = 2, NumND_per_El = 3
-      integer(ESMF_KIND_I4)                         :: rc
 
       if (.not. the_data%is_initialized) then
          print *, ". The mesh is not initialized before calling ", &
             "create_parallel_esmf_mesh_from_meshdata"
-         STOP
+         stop
       endif
       out_esmf_mesh = ESMF_MeshCreate(parametricDim=dim1, spatialDim=spacedim, &
                                       nodeIDs=the_data%NdIDs, nodeCoords=the_data%NdCoords, &
                                       nodeOwners=the_data%NdOwners, elementIDs=the_data%ElIDs, &
                                       elementTypes=the_data%ElTypes, elementConn=the_data%ElConnect, &
-                                      rc=rc)
+                                      rc=out_rc)
    end subroutine
 
    !> \details This function is similar to create_parallel_esmf_mesh_from_meshdata(), except that
@@ -133,14 +133,14 @@ contains
       if (localPet == 0 .and. .not. in_meshdata%is_initialized) then
          print *, "The mesh is not initialized before calling ", &
             "create_masked_esmf_mesh_from_data"
-         STOP
+         stop
       endif
       out_maked_esmf_mesh = ESMF_MeshCreate(parametricDim=dim1, spatialDim=spacedim, &
                                             nodeIDs=in_meshdata%NdIDs, nodeCoords=in_meshdata%NdCoords, &
                                             nodeOwners=in_meshdata%NdOwners, elementIDs=in_meshdata%ElIDs, &
                                             elementTypes=in_meshdata%ElTypes, elementConn=in_meshdata%ElConnect, &
                                             nodeMask=mask_array, rc=rc)
-      !print *, "mesh with mask creation: ", rc
+      call check_error(__LINE__, __FILE__, rc)
    end subroutine create_masked_esmf_mesh_from_data
 
    !> @details Using the data available in <tt> fort.14, fort.18, partmesh.txt</tt> files
@@ -181,17 +181,17 @@ contains
       partmesh_filename = trim(global_fort14_dir//"/partmesh.txt")
 
       if (localPet == 0) then
-         print *, "looking for global fort.14 in the directory: ", the_data%dir_name, "...", new_line('A')
+         print *, "looking for global fort.14 in the directory: ", the_data%dir_name, "...", new_line("A")
       endif
       inquire (FILE=fort14_filename, opened=iOpen, exist=iExist, number=iNum)
       if (.not. iExist) then
          print *, "fort.14 file is not found. I tried to access file in: ", fort14_filename
-         STOP
+         stop
       endif
 
-      open (unit=14, file=fort14_filename, form='FORMATTED', status='OLD', action='READ')
-      open (unit=18, file=fort18_filename, form='FORMATTED', status='OLD', action='READ')
-      open (unit=100, file=partmesh_filename, form='FORMATTED', status='OLD', action='READ')
+      open (unit=14, file=fort14_filename, form="FORMATTED", status="OLD", action="READ")
+      open (unit=18, file=fort18_filename, form="FORMATTED", status="OLD", action="READ")
+      open (unit=100, file=partmesh_filename, form="FORMATTED", status="OLD", action="READ")
 
       read (unit=14, fmt=*)
       read (unit=14, fmt=*) the_data%NumEl, the_data%NumNd
@@ -270,14 +270,15 @@ contains
    !! \param vtu_filename This is the name of the vtu file
    !! \param last_write This parameter indicates if this is the last time we want to
    !! write something to this \c vtu file.
-   subroutine write_meshdata_to_vtu(the_data, vtu_filename, last_write)
+   subroutine write_meshdata_to_vtu(the_data, vtu_filename, last_write, in_hot_data)
       implicit none
-      type(meshdata), intent(in)       :: the_data
-      character(len=*), intent(in)     :: vtu_filename
-      integer(ESMF_KIND_I4)            :: localPet, petCount
-      logical, intent(in)              :: last_write
-      integer(ESMF_KIND_I4)            :: i1, indent, offset_counter, rc, indent2
-      integer(ESMF_KIND_I4), parameter :: dim1 = 2, spacedim = 2, NumND_per_El = 3, vtk_triangle = 5
+      type(meshdata), intent(in)            :: the_data
+      character(len=*), intent(in)          :: vtu_filename
+      integer(ESMF_KIND_I4)                 :: localPet, petCount
+      logical, intent(in)                   :: last_write
+      type(hotdata), optional, intent(in)   :: in_hot_data
+      integer(ESMF_KIND_I4)                 :: i1, indent, offset_counter, rc, indent2
+      integer(ESMF_KIND_I4), parameter      :: dim1 = 2, spacedim = 2, NumND_per_El = 3, vtk_triangle = 5
       indent = 0
 
       call ESMF_VMGet(vm=the_data%vm, localPet=localPet, petCount=petCount, rc=rc)
@@ -286,8 +287,8 @@ contains
          petCount = 1
       end if
 
-      open (unit=1014, file=vtu_filename, form='FORMATTED', &
-            status='UNKNOWN', action='WRITE')
+      open (unit=1014, file=vtu_filename, form="FORMATTED", &
+            status="UNKNOWN", action="WRITE")
       write (unit=1014, fmt="(A,A)") '<VTKFile type="UnstructuredGrid"', &
          ' version="0.1" byte_order="LittleEndian">'
       indent = indent + 2
@@ -388,6 +389,23 @@ contains
       indent = indent - 2
       write (unit=1014, fmt="(A,A)") repeat(" ", indent), &
          '</DataArray>'
+      !
+      if (present(in_hot_data)) then
+          write (unit=1014, fmt="(A,A)") repeat(" ", indent), &
+             '<DataArray type="Int32" Name="NOFF" NumberOfComponents="1" Format="ascii">'
+          indent = indent + 2
+          do i1 = 1, the_data%NumEl, 1
+             indent2 = 1
+             if (i1 == 1) then; indent2 = indent; endif
+             write (unit=1014, fmt="(A,I0)", advance='no') &
+                repeat(" ", indent2), in_hot_data%NOFF(i1)
+          end do
+          write (unit=1014, fmt="(A)") ""
+          indent = indent - 2
+          write (unit=1014, fmt="(A,A)") repeat(" ", indent), &
+             '</DataArray>'
+      end if
+      !
       indent = indent - 2
       write (unit=1014, fmt="(A,A)") repeat(" ", indent), &
          '</CellData>'
@@ -537,7 +555,7 @@ contains
          inquire (FILE=fort14_filename, opened=iOpen, exist=iExist, number=i_num)
          if (.not. iExist) then
             print *, "fort.14 file is not found. I tried to access file in: ", fort14_filename
-            STOP
+            stop
          endif
       endif
       open (unit=14, file=fort14_filename, form='FORMATTED', status='OLD', action='READ')
@@ -868,7 +886,7 @@ contains
       if (.not. iExist) then
          print *, "parallel binary fort.67 file is not found. ", &
             "I tried to access file in: ", fort67_filename
-         STOP
+         stop
       endif
 
       open (unit=67, file=fort67_filename, action='READ', &
@@ -1199,6 +1217,18 @@ contains
       call ESMF_FieldDestroy(the_regrid_data%dst_mask_field)
       call ESMF_FieldDestroy(the_regrid_data%dst_mapped_field)
       call ESMF_FieldDestroy(the_regrid_data%dst_unmapped_field)
+   end subroutine
+
+   subroutine check_error(line_number, file_name, rc)
+      integer, intent(in)              :: line_number, rc
+      character(len=*), intent(in)     :: file_name
+      integer                          :: localPet, ierr
+
+      call MPI_Comm_rank(MPI_COMM_WORLD, localPet, ierr)
+      if (rc .NE. 0) then
+         write (*, "(A, I4, A, I6, A, A, A, I4)"), "Processor ", localPet, &
+            " exited line: ", line_number, " in ", file_name, " with error: ", rc
+      end if
    end subroutine
 
 end module adcirpolate

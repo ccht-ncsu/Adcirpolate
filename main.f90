@@ -224,7 +224,7 @@ program main
    integer(ESMF_KIND_I4)         :: i1, rc, localPet, petCount
    character(len=6)              :: PE_ID
    character(len=*), parameter   :: src_fort14_dir = "coarse/", dst_fort14_dir = "fine/"
-   real(ESMF_KIND_R8), parameter :: h0 = 0.01
+   real(ESMF_KIND_R8), parameter :: h0 = 0.05
 
 #ifdef DEBUG_MODE
    if (localPet == 0) print *, "This is adcirpolate, in debug mode."
@@ -237,6 +237,7 @@ program main
    !
    call ESMF_Initialize(vm=vm1, defaultLogFilename="test.log", &
                         logKindFlag=ESMF_LOGKIND_MULTI, rc=rc)
+   call check_error(__LINE__ - 1, __FILE__, rc)
    call ESMF_VMGet(vm=vm1, localPet=localPet, petCount=petCount, rc=rc)
    write (PE_ID, "(A,I4.4)") "PE", localPet
 
@@ -246,9 +247,13 @@ program main
    ! we write the mesh into parallel vtu outputs.
    !
    call extract_parallel_data_from_mesh(vm1, src_fort14_dir, src_data)
-   call create_parallel_esmf_mesh_from_meshdata(src_data, src_mesh)
+   if (localPet == 0) print *, "Creating parallel ESMF mesh from ADCIRC source mesh", new_line("A")
+   call create_parallel_esmf_mesh_from_meshdata(src_data, src_mesh, rc)
+   call check_error(__LINE__, __FILE__, rc)
    call extract_parallel_data_from_mesh(vm1, dst_fort14_dir, dst_data)
-   call create_parallel_esmf_mesh_from_meshdata(dst_data, dst_mesh)
+   if (localPet == 0) print *, "Creating parallel ESMF mesh from ADCIRC destination mesh", new_line("A")
+   call create_parallel_esmf_mesh_from_meshdata(dst_data, dst_mesh, rc)
+   call check_error(__LINE__, __FILE__, rc)
 
    ! I will replace this with preprocessor directives.
    !    call write_meshdata_to_vtu(src_data, PE_ID//"_src_mesh.vtu", .true.)
@@ -258,6 +263,7 @@ program main
    ! Now, let us read data from fort.67. We also allocate the hotdata structure for
    ! destination mesh and fields.
    !
+   if (localPet == 0) print *, "Reading parallel hotdata from source directory.", new_line("A")
    call extract_hotdata_from_parallel_binary_fort_67(src_data, src_hotdata, &
                                                      src_fort14_dir, .true.)
    call allocate_hotdata(dst_hotdata, dst_data)
@@ -279,14 +285,26 @@ program main
    !   4- An ESMF_Field on the destination mesh, which will be used for interpolating
    !      data on the destination points with mask=0.
    !
+   if (localPet == 0) print *, "Creating ESMF fields:"
    the_regrid_data%src_datafield = ESMF_FieldCreate(mesh=src_mesh, &
                                                     typekind=ESMF_TYPEKIND_R8, rc=rc)
+   if (rc == 0 .AND. localPet == 0) print *, "source data field is created."
+   call check_error(__LINE__ - 2, __FILE__, rc)
+
    the_regrid_data%dst_mask_field = ESMF_FieldCreate(mesh=dst_mesh, &
                                                      typekind=ESMF_TYPEKIND_R8, rc=rc)
+   if (rc == 0 .AND. localPet == 0) print *, "destination mask field is created."
+   call check_error(__LINE__ - 2, __FILE__, rc)
+
    the_regrid_data%dst_mapped_field = ESMF_FieldCreate(mesh=dst_mesh, &
                                                        typekind=ESMF_TYPEKIND_R8, rc=rc)
+   if (rc == 0 .AND. localPet == 0) print *, "destination mapped data field is created."
+   call check_error(__LINE__ - 2, __FILE__, rc)
+
    the_regrid_data%dst_unmapped_field = ESMF_FieldCreate(mesh=dst_mesh, &
                                                          typekind=ESMF_TYPEKIND_R8, rc=rc)
+   if (rc == 0 .AND. localPet == 0) print *, "destination unmapped data field is created.", new_line("A")
+   call check_error(__LINE__ - 2, __FILE__, rc)
 
    !
    ! This is the preferred procedure in using ESMF to get a pointer to the
@@ -295,12 +313,19 @@ program main
    !
    call ESMF_FieldGet(the_regrid_data%src_datafield, &
                       farrayPtr=the_regrid_data%src_fieldptr, rc=rc)
+   call check_error(__LINE__ - 1, __FILE__, rc)
+
    call ESMF_FieldGet(the_regrid_data%dst_mask_field, &
                       farrayPtr=the_regrid_data%dst_maskptr, rc=rc)
+   call check_error(__LINE__ - 1, __FILE__, rc)
+
    call ESMF_FieldGet(the_regrid_data%dst_mapped_field, &
                       farrayPtr=the_regrid_data%mapped_fieldptr, rc=rc)
+   call check_error(__LINE__ - 1, __FILE__, rc)
+
    call ESMF_FieldGet(the_regrid_data%dst_unmapped_field, &
                       farrayPtr=the_regrid_data%unmapped_fieldptr, rc=rc)
+   call check_error(__LINE__ - 1, __FILE__, rc)
 
    !
    ! At this section, we construct our interpolation operator (A matrix which maps
@@ -308,16 +333,21 @@ program main
    ! only the interpolation matrices will be constructed. We construct one matrix for
    ! nodal points with mask=1, and one for those points with mask=0.
    !
+   if (localPet == 0) print *, "Creating ESMF regriding operators:"
    call ESMF_FieldRegridStore(srcField=the_regrid_data%src_datafield, &
                               dstField=the_regrid_data%dst_mask_field, &
                               unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
                               routeHandle=the_regrid_data%mapped_route_handle, &
                               regridmethod=ESMF_REGRIDMETHOD_BILINEAR, rc=rc)
+   if (localPet == 0 .AND. rc == 0) print *, "mapped regriding operator is created."
+   call check_error(__LINE__, __FILE__, rc)
    call ESMF_FieldRegridStore(srcField=the_regrid_data%src_datafield, &
                               dstField=the_regrid_data%dst_unmapped_field, &
                               unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
                               routeHandle=the_regrid_data%unmapped_route_handle, &
                               regridmethod=ESMF_REGRIDMETHOD_NEAREST_STOD, rc=rc)
+   if (localPet == 0 .AND. rc == 0) print *, "unmapped regriding operator is created.", new_line("A")
+   call check_error(__LINE__, __FILE__, rc)
 
    !
    ! This is the place that we create our mask on the destination mesh. By mask,
@@ -367,13 +397,13 @@ program main
       call extract_global_data_from_fort14(dst_data%dir_name//"/fort.14", global_dst_data)
       call allocate_hotdata(global_src_hotdata, global_src_data)
       call allocate_hotdata(global_dst_hotdata, global_dst_data)
-
    end if
+
    call gather_src_nodal_hotdata_on_root(src_hotdata, global_src_hotdata, src_data, global_src_data, 0)
    call gather_dst_nodal_hotdata_on_root(dst_hotdata, global_dst_hotdata, dst_data, global_dst_data, 0)
 
    if (localPet == 0) then
-      print *, "Computing the wet and dry nodes and elements."
+      print *, "Computing the wet and dry nodes and elements.", new_line("A")
       call compute_wet_dry(global_dst_data, global_dst_hotdata, h0)
    end if
 
@@ -398,13 +428,13 @@ program main
                                    "VV2", src_data%dir_name//"/global_mesh.vtu", .true.)
       !
       call write_meshdata_to_vtu(global_dst_data, &
-                                 dst_data%dir_name//"/global_mesh.vtu", .false.)
+                                 dst_data%dir_name//"/global_mesh.vtu", .false., global_dst_hotdata)
       call write_int_node_field_to_vtu(global_dst_hotdata%NNODECODE, &
                                        "NODECODE", dst_data%dir_name//"/global_mesh.vtu", .false.)
       call write_node_field_to_vtu(global_dst_hotdata%ETA1, &
                                    "ETA1", dst_data%dir_name//"/global_mesh.vtu", .false.)
-      call write_node_field_to_vtu(global_src_hotdata%ETA2, &
-                                   "ETA2", src_data%dir_name//"/global_mesh.vtu", .false.)
+      call write_node_field_to_vtu(global_dst_hotdata%ETA2, &
+                                   "ETA2", dst_data%dir_name//"/global_mesh.vtu", .false.)
       call write_node_field_to_vtu(global_dst_hotdata%UU2, &
                                    "UU2", dst_data%dir_name//"/global_mesh.vtu", .false.)
       call write_node_field_to_vtu(global_dst_hotdata%VV2, &
@@ -452,6 +482,8 @@ program main
       global_dst_hotdata%IGPP = 0
       global_dst_hotdata%IGWP = 0
       global_dst_hotdata%NSCOUGW = 0
+
+      print *, "Writing the global fort.67 in the destination mesh."
       call write_serial_hotfile_to_fort_67(global_dst_data, global_dst_hotdata, &
                                            dst_fort14_dir, .false.)
    end if
