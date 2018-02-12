@@ -163,9 +163,10 @@ contains
       character(len=6)                      :: PE_ID, garbage1
       character(len=200)                    :: fort14_filename, fort18_filename, partmesh_filename
       integer(ESMF_KIND_I4)                 :: i1, j1, i_num, localPet, petCount, num_global_nodes, &
-                                               garbage2, garbage3, iNum, dir_name_length
+                                               garbage2, garbage3, iNum, dir_name_length, el_nd_ids(3)
       logical                               :: iOpen, iExist
-      integer(ESMF_KIND_I4), allocatable    :: local_node_numbers(:), local_elem_numbers(:), node_owner(:)
+      integer(ESMF_KIND_I4), allocatable    :: local_node_numbers(:), local_elem_numbers(:), node_owner(:), &
+                                               global_2_local_node_map(:)
       integer(ESMF_KIND_I4), parameter      :: dim1 = 2, NumND_per_El = 3
 
       the_data%vm = vm
@@ -210,6 +211,8 @@ contains
       read (unit=18, fmt=*) local_elem_numbers
       the_data%ElIDs = abs(local_elem_numbers)
       read (unit=18, fmt=*) garbage1, num_global_nodes, garbage2, garbage3
+      if (garbage3 .NE. the_data%NumNd) call throw_error_and_stop(__LINE__, __FILE__, &
+                                             "issue with mesh partitioning.")
       read (unit=18, fmt=*) local_node_numbers
       the_data%NumOwnedND = 0
       do i1 = 1, the_data%NumNd, 1
@@ -219,20 +222,25 @@ contains
       end do
       the_data%NdIDs = abs(local_node_numbers)
       allocate (node_owner(num_global_nodes))
+      allocate (global_2_local_node_map(num_global_nodes))
       allocate (the_data%owned_to_present_nodes(the_data%NumOwnedND))
+      global_2_local_node_map(:) = -1
       read (unit=100, fmt=*) node_owner
 
       do i1 = 1, the_data%NumNd, 1
-         read (unit=14, fmt=*) local_node_numbers(i1), &
+         local_node_numbers(i1) = i1
+         read (unit=14, fmt=*) j1, &
             the_data%NdCoords((i1 - 1)*dim1 + 1), &
             the_data%NdCoords((i1 - 1)*dim1 + 2), &
             the_data%bathymetry(i1)
+         global_2_local_node_map(j1) = i1
       end do
       do i1 = 1, the_data%NumEl, 1
-         read (unit=14, fmt=*) local_elem_numbers(i1), i_num, &
-            the_data%ElConnect((i1 - 1)*NumND_per_El + 1), &
-            the_data%ElConnect((i1 - 1)*NumND_per_El + 2), &
-            the_data%ElConnect((i1 - 1)*NumND_per_El + 3)
+         read (unit=14, fmt=*) local_elem_numbers(i1), i_num, el_nd_ids(:)
+         el_nd_ids(:) = global_2_local_node_map(el_nd_ids(:))
+         do j1 = 1, 3
+            the_data%ElConnect((i1 - 1)*NumND_per_El + j1) = el_nd_ids(j1)
+         end do
       end do
 
       do i1 = 1, the_data%NumNd, 1
@@ -1229,6 +1237,16 @@ contains
          write (*, "(A, I4, A, I6, A, A, A, I4)"), "Processor ", localPet, &
             " exited line: ", line_number, " in ", file_name, " with error: ", rc
       end if
+   end subroutine
+
+   subroutine throw_error_and_stop(line_number, file_name, error_message)
+      integer, intent(in)               :: line_number
+      character(len=*), intent(in)      :: file_name, error_message
+      call MPI_Comm_rank(MPI_COMM_WORLD, localPet, ierr)
+      write (*, "(A, I4, A, I6, A, A, A, A)"), "Processor ", localPet, &
+                " exited line: ", line_number, " in: ", file_name, &
+                " with error: ", error_message
+      stop
    end subroutine
 
 end module adcirpolate

@@ -247,17 +247,16 @@ program main
    ! we write the mesh into parallel vtu outputs.
    !
    call extract_parallel_data_from_mesh(vm1, src_fort14_dir, src_data)
+   call write_meshdata_to_vtu(src_data, PE_ID//"_src_mesh.vtu", .true.)
    if (localPet == 0) print *, "Creating parallel ESMF mesh from ADCIRC source mesh", new_line("A")
    call create_parallel_esmf_mesh_from_meshdata(src_data, src_mesh, rc)
    call check_error(__LINE__, __FILE__, rc)
+
    call extract_parallel_data_from_mesh(vm1, dst_fort14_dir, dst_data)
+   call write_meshdata_to_vtu(dst_data, PE_ID//"_dst_mesh.vtu", .true.)
    if (localPet == 0) print *, "Creating parallel ESMF mesh from ADCIRC destination mesh", new_line("A")
    call create_parallel_esmf_mesh_from_meshdata(dst_data, dst_mesh, rc)
    call check_error(__LINE__, __FILE__, rc)
-
-   ! I will replace this with preprocessor directives.
-   !    call write_meshdata_to_vtu(src_data, PE_ID//"_src_mesh.vtu", .true.)
-   !    call write_meshdata_to_vtu(dst_data, PE_ID//"_dst_mesh.vtu", .true.)
 
    !
    ! Now, let us read data from fort.67. We also allocate the hotdata structure for
