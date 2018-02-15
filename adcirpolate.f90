@@ -1,10 +1,16 @@
-!> @author Ali Samii - 2016
+!
+! The following include file contains all of the C preprocessor macros used in the code.
+!
+#include "c_preprocessor.h"
+
+!> @author Ali Samii - 2016 - Updated 2018
 !! Ali Samii - Department of ASE/EM, UT Austin
 !! @brief This module is an interface between parallel Adcirc input files and ESMF library.
 module adcirpolate
 
    use ESMF
    use MPI
+   use errors_and_msgs
 
    !> \author Ali Samii - 2016
    !! \brief This object stores the data required for construction of a parallel or serial
@@ -94,23 +100,24 @@ contains
    !! should be called prior to calling this function.
    !! \param the_data This the input meshdata object.
    !! \param out_esmf_mesh This is the ouput ESMF_Mesh object.
-   subroutine create_parallel_esmf_mesh_from_meshdata(the_data, out_esmf_mesh, out_rc)
+   subroutine create_parallel_esmf_mesh_from_meshdata(the_data, out_esmf_mesh)
       implicit none
       type(ESMF_Mesh), intent(out)                  :: out_esmf_mesh
-      integer, intent(out)                          :: out_rc
+      integer                                       :: rc
       type(meshdata), intent(in)                    :: the_data
       integer(ESMF_KIND_I4), parameter              :: dim1 = 2, spacedim = 2, NumND_per_El = 3
 
       if (.not. the_data%is_initialized) then
-         print *, ". The mesh is not initialized before calling ", &
-            "create_parallel_esmf_mesh_from_meshdata"
-         stop
+         call throw_fatal_error(__LINE__, __FILE__, &
+            "The mesh is not initialized before calling "//&
+            "create_parallel_esmf_mesh_from_meshdata")
       endif
       out_esmf_mesh = ESMF_MeshCreate(parametricDim=dim1, spatialDim=spacedim, &
                                       nodeIDs=the_data%NdIDs, nodeCoords=the_data%NdCoords, &
                                       nodeOwners=the_data%NdOwners, elementIDs=the_data%ElIDs, &
                                       elementTypes=the_data%ElTypes, elementConn=the_data%ElConnect, &
-                                      rc=out_rc)
+                                      rc=rc)
+      CHECK_ERR_CODE(0, rc)
    end subroutine
 
    !> \details This function is similar to create_parallel_esmf_mesh_from_meshdata(), except that
@@ -131,16 +138,16 @@ contains
 
       call ESMF_VMGet(vm=in_meshdata%vm, localPet=localPet, petCount=petCount)
       if (localPet == 0 .and. .not. in_meshdata%is_initialized) then
-         print *, "The mesh is not initialized before calling ", &
-            "create_masked_esmf_mesh_from_data"
-         stop
+         call throw_fatal_error(__LINE__, __FILE__,&
+            "The mesh is not initialized before calling "//&
+            "create_masked_esmf_mesh_from_data")
       endif
       out_maked_esmf_mesh = ESMF_MeshCreate(parametricDim=dim1, spatialDim=spacedim, &
                                             nodeIDs=in_meshdata%NdIDs, nodeCoords=in_meshdata%NdCoords, &
                                             nodeOwners=in_meshdata%NdOwners, elementIDs=in_meshdata%ElIDs, &
                                             elementTypes=in_meshdata%ElTypes, elementConn=in_meshdata%ElConnect, &
                                             nodeMask=mask_array, rc=rc)
-      call check_error(__LINE__, __FILE__, rc)
+      CHECK_ERR_CODE(localPet, rc)
    end subroutine create_masked_esmf_mesh_from_data
 
    !> @details Using the data available in <tt> fort.14, fort.18, partmesh.txt</tt> files
@@ -182,13 +189,12 @@ contains
       partmesh_filename = trim(global_fort14_dir//"/partmesh.txt")
 
       if (localPet == 0) then
-         print *, "looking for global fort.14 in the directory: ", the_data%dir_name, "...", new_line("A")
+         call show_message(" Looking for global fort.14 in the directory: "//&
+            the_data%dir_name//new_line("A"))
       endif
       inquire (FILE=fort14_filename, opened=iOpen, exist=iExist, number=iNum)
-      if (.not. iExist) then
-         print *, "fort.14 file is not found. I tried to access file in: ", fort14_filename
-         stop
-      endif
+      if (.not. iExist) call throw_fatal_error("fort.14 file is not found. I tried to access file in: " &
+                        //fort14_filename)
 
       open (unit=14, file=fort14_filename, form="FORMATTED", status="OLD", action="READ")
       open (unit=18, file=fort18_filename, form="FORMATTED", status="OLD", action="READ")
@@ -211,7 +217,7 @@ contains
       read (unit=18, fmt=*) local_elem_numbers
       the_data%ElIDs = abs(local_elem_numbers)
       read (unit=18, fmt=*) garbage1, num_global_nodes, garbage2, garbage3
-      if (garbage3 .NE. the_data%NumNd) call throw_error_and_stop(__LINE__, __FILE__, &
+      if (garbage3 .NE. the_data%NumNd) call throw_fatal_error(__LINE__, __FILE__, &
                                              "issue with mesh partitioning.")
       read (unit=18, fmt=*) local_node_numbers
       the_data%NumOwnedND = 0
@@ -559,12 +565,10 @@ contains
 
       call ESMF_VMGet(vm=the_data%vm, localPet=localPet, petCount=petCount, rc=rc)
       if (localPet == 0) then
-         print *, "looking for global fort.14 in the directory: ", the_data%dir_name, "..."
+         call show_message("looking for global fort.14 in the directory: "//the_data%dir_name)
          inquire (FILE=fort14_filename, opened=iOpen, exist=iExist, number=i_num)
-         if (.not. iExist) then
-            print *, "fort.14 file is not found. I tried to access file in: ", fort14_filename
-            stop
-         endif
+         if (.not. iExist) call throw_fatal_error("fort.14 file is not found."// &
+            "I tried to access file in: "//fort14_filename)
       endif
       open (unit=14, file=fort14_filename, form='FORMATTED', status='OLD', action='READ')
       read (unit=14, fmt=*)
@@ -615,7 +619,8 @@ contains
       call ESMF_VMGet(vm=vm1, localPet=localPet, petCount=petCount, rc=rc)
       if (localPet == root) then
          if (.not. allocated(fieldarray) .or. .not. allocated(out_fieldarray)) then
-            print *, "The input arrays into gather_int_datafield_on_root should be allocated."
+            call throw_fatal_error( "The input arrays into "// &
+               "gather_int_datafield_on_root should be allocated.")
          end if
       end if
       send_count = size(fieldarray)
@@ -642,8 +647,9 @@ contains
                        temp_fieldarray, recv_counts, gather_displs, MPI_INTEGER, &
                        root, MPI_COMM_WORLD, rc)
       !
-      if (localPet == 0) print *, "    gathered on root with code: ", rc, new_line('A')
-
+      CHECK_ERR_CODE(localPet, rc)
+      if (localPet == 0) call show_message("    gathered on root with code: 0"//&
+                                           new_line('A'))
       if (localPet == 0) then
          do i1 = 1, petCount, 1
             write (PE_ID, "(A,I4.4)") 'PE', i1 - 1
@@ -689,7 +695,8 @@ contains
       call ESMF_VMGet(vm=vm1, localPet=localPet, petCount=petCount, rc=rc)
       if (localPet == root) then
          if (.not. allocated(fieldarray) .or. .not. allocated(out_fieldarray)) then
-            print *, "The input arrays into gather_datafield_on_root should be allocated."
+            call throw_fatal_error("The input arrays into"//&
+               "gather_datafield_on_root should be allocated.")
          end if
       endif
       send_count = size(fieldarray)
@@ -715,8 +722,9 @@ contains
       call MPI_Gatherv(fieldarray, send_count, MPI_DOUBLE_PRECISION, &
                        temp_fieldarray, recv_counts, gather_displs, MPI_DOUBLE_PRECISION, &
                        0, MPI_COMM_WORLD, rc)
-      if (localPet == 0) print *, "    gathered on root with code: ", rc, new_line('A')
-
+      CHECK_ERR_CODE(localPet, rc)
+      if (localPet == 0) call show_message("    gathered on root with code: 0"//&
+                                           new_line('A'))
       if (localPet == 0) then
          do i1 = 1, petCount, 1
             write (PE_ID, "(A,I4.4)") 'PE', i1 - 1
@@ -762,43 +770,43 @@ contains
          allocate (int_globalfieldarray_ptr(global_meshdata%NumNd))
       end if
 
-      if (localPet == root) print *, "Gathering src eta1 on root:"
+      if (localPet == root) call show_message("Gathering src eta1 on root:")
       localfieldarray_ptr = localized_hotdata%ETA1
       call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
                                     root, globalfieldarray_ptr, localized_meshdata%dir_name)
       if (localPet == root) global_hotdata%ETA1 = globalfieldarray_ptr
       !
-      if (localPet == root) print *, "Gathering src eta2 on root:"
+      if (localPet == root) call show_message("Gathering src eta2 on root:")
       localfieldarray_ptr = localized_hotdata%ETA2
       call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
                                     root, globalfieldarray_ptr, localized_meshdata%dir_name)
       if (localPet == root) global_hotdata%ETA2 = globalfieldarray_ptr
       !
-      if (localPet == root) print *, "Gathering src etaDisc on root:"
+      if (localPet == root) call show_message("Gathering src etaDisc on root:")
       localfieldarray_ptr = localized_hotdata%ETADisc
       call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
                                     root, globalfieldarray_ptr, localized_meshdata%dir_name)
       if (localPet == root) global_hotdata%ETADisc = globalfieldarray_ptr
       !
-      if (localPet == root) print *, "Gathering src UU2 on root:"
+      if (localPet == root) call show_message("Gathering src UU2 on root:")
       localfieldarray_ptr = localized_hotdata%UU2
       call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
                                     root, globalfieldarray_ptr, localized_meshdata%dir_name)
       if (localPet == root) global_hotdata%UU2 = globalfieldarray_ptr
       !
-      if (localPet == root) print *, "Gathering src VV2 on root:"
+      if (localPet == root) call show_message("Gathering src VV2 on root:")
       localfieldarray_ptr = localized_hotdata%VV2
       call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
                                     root, globalfieldarray_ptr, localized_meshdata%dir_name)
       if (localPet == root) global_hotdata%VV2 = globalfieldarray_ptr
       !
-      if (localPet == root) print *, "Gathering src CH1 on root:"
+      if (localPet == root) call show_message("Gathering src CH1 on root:")
       localfieldarray_ptr = localized_hotdata%CH1
       call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
                                     root, globalfieldarray_ptr, localized_meshdata%dir_name)
       if (localPet == root) global_hotdata%CH1 = globalfieldarray_ptr
       !
-      if (localPet == root) print *, "Gathering src NODECODE on root:"
+      if (localPet == root) call show_message("Gathering src NODECODE on root:")
       int_localfieldarray_ptr = localized_hotdata%NNODECODE
       call gather_int_datafield_on_root(localized_meshdata%vm, int_localfieldarray_ptr, &
                                         root, int_globalfieldarray_ptr, localized_meshdata%dir_name)
@@ -827,43 +835,43 @@ contains
          allocate (int_globalfieldarray_ptr(global_meshdata%NumNd))
       end if
 
-      if (localPet == root) print *, "Gathering dst eta1 on root:"
+      if (localPet == root) call show_message("Gathering dst eta1 on root:")
       localfieldarray_ptr(:) = localized_hotdata%ETA1(localized_meshdata%owned_to_present_nodes(:))
       call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
                                     root, globalfieldarray_ptr, localized_meshdata%dir_name)
       if (localPet == root) global_hotdata%ETA1 = globalfieldarray_ptr
       !
-      if (localPet == root) print *, "Gathering dst eta2 on root:"
+      if (localPet == root) call show_message("Gathering dst eta2 on root:")
       localfieldarray_ptr(:) = localized_hotdata%ETA2(localized_meshdata%owned_to_present_nodes(:))
       call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
                                     root, globalfieldarray_ptr, localized_meshdata%dir_name)
       if (localPet == root) global_hotdata%ETA2 = globalfieldarray_ptr
       !
-      if (localPet == root) print *, "Gathering dst etaDisc on root:"
+      if (localPet == root) call show_message("Gathering dst etaDisc on root:")
       localfieldarray_ptr(:) = localized_hotdata%ETADisc(localized_meshdata%owned_to_present_nodes(:))
       call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
                                     root, globalfieldarray_ptr, localized_meshdata%dir_name)
       if (localPet == root) global_hotdata%ETADisc = globalfieldarray_ptr
       !
-      if (localPet == root) print *, "Gathering dst UU2 on root:"
+      if (localPet == root) call show_message("Gathering dst UU2 on root:")
       localfieldarray_ptr(:) = localized_hotdata%UU2(localized_meshdata%owned_to_present_nodes(:))
       call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
                                     root, globalfieldarray_ptr, localized_meshdata%dir_name)
       if (localPet == root) global_hotdata%UU2 = globalfieldarray_ptr
       !
-      if (localPet == root) print *, "Gathering dst VV2 on root:"
+      if (localPet == root) call show_message("Gathering dst VV2 on root:")
       localfieldarray_ptr(:) = localized_hotdata%VV2(localized_meshdata%owned_to_present_nodes(:))
       call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
                                     root, globalfieldarray_ptr, localized_meshdata%dir_name)
       if (localPet == root) global_hotdata%VV2 = globalfieldarray_ptr
       !
-      if (localPet == root) print *, "Gathering dst CH1 on root:"
+      if (localPet == root) call show_message("Gathering dst CH1 on root:")
       localfieldarray_ptr(:) = localized_hotdata%CH1(localized_meshdata%owned_to_present_nodes(:))
       call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
                                     root, globalfieldarray_ptr, localized_meshdata%dir_name)
       if (localPet == root) global_hotdata%CH1 = globalfieldarray_ptr
       !
-      if (localPet == root) print *, "Gathering dst NODECODE on root:"
+      if (localPet == root) call show_message("Gathering dst NODECODE on root:")
       int_localfieldarray_ptr(:) = localized_hotdata%NNODECODE(localized_meshdata%owned_to_present_nodes(:))
       call gather_int_datafield_on_root(localized_meshdata%vm, int_localfieldarray_ptr, &
                                         root, int_globalfieldarray_ptr, localized_meshdata%dir_name)
@@ -880,7 +888,7 @@ contains
       type(hotdata), intent(out)   :: the_hotdata
       character(len=*), intent(in) :: global_fort14_dir
       logical, intent(in)          :: write_ascii
-      integer(ESMF_KIND_I4)        :: i1, localPet, petCount, rc, ihotstp, iNum
+      integer(ESMF_KIND_I4)        :: i1, localPet, petCount, rc, ihotstp, iNum, io_stat
       character(len=6)             :: PE_ID
       character(len=200)           :: fort67_filename, fort67_ascii_filename
       logical                      :: iExist, iOpen
@@ -892,29 +900,28 @@ contains
       fort67_filename = trim(global_fort14_dir//PE_ID//"/fort.67")
       inquire (FILE=fort67_filename, opened=iOpen, exist=iExist, number=iNum)
       if (.not. iExist) then
-         print *, "parallel binary fort.67 file is not found. ", &
-            "I tried to access file in: ", fort67_filename
-         stop
+         call throw_fatal_error("parallel binary fort.67 file is not found. "//&
+                                "I tried to access file in: "//fort67_filename)
       endif
 
       open (unit=67, file=fort67_filename, action='READ', &
             access='DIRECT', recl=8, iostat=rc, status='OLD')
       ihotstp = 1
-      read (unit=67, REC=ihotstp) the_hotdata%InputFileFmtVn;
+      read (unit=67, REC=ihotstp, iostat=io_stat) the_hotdata%InputFileFmtVn;
       ihotstp = ihotstp + 1
-      read (unit=67, REC=ihotstp) the_hotdata%IMHS;
+      read (unit=67, REC=ihotstp, iostat=io_stat) the_hotdata%IMHS;
       ihotstp = ihotstp + 1
-      read (unit=67, REC=ihotstp) the_hotdata%TimeLoc;
+      read (unit=67, REC=ihotstp, iostat=io_stat) the_hotdata%TimeLoc;
       ihotstp = ihotstp + 1
-      read (unit=67, REC=ihotstp) the_hotdata%ITHS;
+      read (unit=67, REC=ihotstp, iostat=io_stat) the_hotdata%ITHS;
       ihotstp = ihotstp + 1
-      read (unit=67, REC=ihotstp) the_hotdata%NP_G_IN;
+      read (unit=67, REC=ihotstp, iostat=io_stat) the_hotdata%NP_G_IN;
       ihotstp = ihotstp + 1
-      read (unit=67, REC=ihotstp) the_hotdata%NE_G_IN;
+      read (unit=67, REC=ihotstp, iostat=io_stat) the_hotdata%NE_G_IN;
       ihotstp = ihotstp + 1
-      read (unit=67, REC=ihotstp) the_hotdata%NP_A_IN;
+      read (unit=67, REC=ihotstp, iostat=io_stat) the_hotdata%NP_A_IN;
       ihotstp = ihotstp + 1
-      read (unit=67, REC=ihotstp) the_hotdata%NE_A_IN;
+      read (unit=67, REC=ihotstp, iostat=io_stat) the_hotdata%NE_A_IN;
       ihotstp = ihotstp + 1
 
       do i1 = 1, the_meshdata%NumNd, 1
@@ -1018,6 +1025,7 @@ contains
             the_hotdata%IGPP, the_hotdata%IGWP, the_hotdata%NSCOUGW
          close (670)
       end if
+      return
    end subroutine
 
    !>
@@ -1177,6 +1185,7 @@ contains
       type(meshdata)                      :: src_data, dst_data
       real(ESMF_KIND_R8), intent(in)      :: src_array_of_present_nodes(:)
       integer(ESMF_KIND_I4)               :: i1, localPet, petCount, rc
+      character(len=4)                    :: rc_str
 
       call ESMF_VMGet(vm=src_data%vm, localPet=localPet, petCount=petCount, rc=rc)
       do i1 = 1, src_data%NumOwnedNd, 1
@@ -1185,11 +1194,14 @@ contains
       call ESMF_FieldRegrid(srcField=the_regrid_data%src_datafield, &
                             dstField=the_regrid_data%dst_mapped_field, &
                             routeHandle=the_regrid_data%mapped_route_handle, rc=rc)
-      if (localPet == 0) print *, "    mapped regriding done with code: ", rc
+      write(rc_str, "(I4)") rc
+      if (localPet == 0) call show_message("    mapped regriding done with code: "//rc_str)
       call ESMF_FieldRegrid(srcField=the_regrid_data%src_datafield, &
                             dstField=the_regrid_data%dst_unmapped_field, &
                             routeHandle=the_regrid_data%unmapped_route_handle, rc=rc)
-      if (localPet == 0) print *, "    unmapped regriding done with code: ", rc, new_line('A')
+      write(rc_str, "(I4)") rc
+      if (localPet == 0) call show_message("    unmapped regriding done with code: "//&
+                                           rc_str//new_line('A'))
       do i1 = 1, dst_data%NumOwnedND, 1
          if (abs(the_regrid_data%dst_maskptr(i1)) < 1.d-8) then
             the_regrid_data%mapped_fieldptr(i1) = the_regrid_data%unmapped_fieldptr(i1)
@@ -1225,28 +1237,6 @@ contains
       call ESMF_FieldDestroy(the_regrid_data%dst_mask_field)
       call ESMF_FieldDestroy(the_regrid_data%dst_mapped_field)
       call ESMF_FieldDestroy(the_regrid_data%dst_unmapped_field)
-   end subroutine
-
-   subroutine check_error(line_number, file_name, rc)
-      integer, intent(in)              :: line_number, rc
-      character(len=*), intent(in)     :: file_name
-      integer                          :: localPet, ierr
-
-      call MPI_Comm_rank(MPI_COMM_WORLD, localPet, ierr)
-      if (rc .NE. 0) then
-         write (*, "(A, I4, A, I6, A, A, A, I4)"), "Processor ", localPet, &
-            " exited line: ", line_number, " in ", file_name, " with error: ", rc
-      end if
-   end subroutine
-
-   subroutine throw_error_and_stop(line_number, file_name, error_message)
-      integer, intent(in)               :: line_number
-      character(len=*), intent(in)      :: file_name, error_message
-      call MPI_Comm_rank(MPI_COMM_WORLD, localPet, ierr)
-      write (*, "(A, I4, A, I6, A, A, A, A)"), "Processor ", localPet, &
-                " exited line: ", line_number, " in: ", file_name, &
-                " with error: ", error_message
-      stop
    end subroutine
 
 end module adcirpolate

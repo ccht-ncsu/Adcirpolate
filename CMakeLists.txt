@@ -1,7 +1,6 @@
 cmake_minimum_required (VERSION 2.8)
 project (adcirpolate Fortran)
 
-set (CMAKE_Fortan_COMPILER "mpif90")
 set (CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/CMakeModules")
 
 find_package (ESMF)
@@ -17,18 +16,32 @@ if (DEFINED ENV{HDF5_DIR})
   find_package (HDF5)
 endif ()
 
-if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-  add_definitions(-DDEBUG_MODE)
-  message("Building the software in debug mode.")
-endif()
-
-add_executable(${PROJECT_NAME} adcirpolate.f90 main.f90 wetdry.f90)
+add_executable(${PROJECT_NAME} adcirpolate.f90
+               main.f90 wetdry.f90 errors_and_msgs.f90
+               c_preprocessor.h)
 
 set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}\
                          ${ESMF_COMPILER_LINE}")
 
 set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}\
                          ${ESMF_LINK_LINE} -g -cpp")
+
+#
+# Adding record length interpretation for Intel
+#
+if ("${CMAKE_Fortran_COMPILER_ID}" STREQUAL "Intel")
+  set (CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}\
+                            -assume byterecl")
+  message ("+> Compiler is intel and -assume byterecl is used.")
+endif ()
+
+#
+# Building in debug mode
+#
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+  add_definitions(-DDEBUG_MODE)
+  message("Building the software in debug mode.")
+endif()
 
 add_custom_target(debug
   COMMAND ${CMAKE_COMMAND} -DCMAKE_BUILD_TYPE=Debug ${CMAKE_SOURCE_DIR}

@@ -38,175 +38,9 @@
 !! <div style="text-align:center; font-size:150%;">The decomposed coarse mesh, which is used as the source mesh.</div>
 !! <img src="Images/fine_mesh_subdomains.png" width=600em />
 !! <div style="text-align:center; font-size:150%;">The decomposed fine mesh, which is used as the destination mesh.</div>
-!! We use the following code for this purpose. The comments in the code make the overall
-!! procedure of our technique more clear.
 !!
-!! \code{.f90}
-!!    program main
-!!
-!!        use ESMF
-!!        use MPI
-!!        use ADCIRC_interpolation
-!!
-!!        implicit none
-!!        real(ESMF_KIND_R8), pointer                      :: src_fieldptr(:), mapped_fieldptr(:), unmapped_fieldptr(:), &
-!!            dst_maskptr(:), global_fieldptr(:)
-!!        type(ESMF_VM)                                    :: vm1
-!!        type(meshdata)                                   :: src_data, dst_data, global_src_data, global_dst_data
-!!        type(ESMF_Mesh)                                  :: src_mesh, dst_mesh
-!!        type(ESMF_Field)                                 :: src_datafield, dst_unmapped_field, dst_mapped_field, dst_mask_field
-!!        type(ESMF_RouteHandle)                           :: mapped_route_handle, unmapped_route_handle
-!!        integer                                          :: i1, rc, localPet, petCount
-!!        character(len=6)                                 :: PE_ID
-!!        character(len=:), parameter                      :: src_fort14_dir = "coarse/", dst_fort14_dir = "fine/"
-!!
-!!        !
-!!        ! Any program using ESMF library should start with ESMF_Initialize(...).
-!!        ! Next we get the ESMF_VM (virtual machine) and using this VM, we obtain
-!!        ! the ID of our local PE and total number of PE's in the communicator.
-!!        !
-!!        call ESMF_Initialize(vm=vm1, defaultLogFilename="test.log", &
-!!            logKindFlag=ESMF_LOGKIND_MULTI, rc=rc)
-!!        call ESMF_VMGet(vm=vm1, localPet=localPet, petCount=petCount, rc=rc)
-!!        write(PE_ID, "(A,I4.4)") "PE", localPet
-!!
-!!        !
-!!        ! Next, we create our meshdata objects for source and destination meshes,
-!!        ! and using those meshdata objects, we create the ESMF_Mesh objects, and
-!!        ! we write the mesh into parallel vtu outputs.
-!!        !
-!!        call extract_parallel_data_from_mesh(vm1, src_fort14_dir, src_data)
-!!        call create_parallel_esmf_mesh_from_meshdata(src_data, src_mesh)
-!!        call extract_parallel_data_from_mesh(vm1, dst_fort14_dir, dst_data)
-!!        call create_parallel_esmf_mesh_from_meshdata(dst_data, dst_mesh)
-!!        call write_meshdata_to_vtu(src_data, PE_ID//"_src_mesh.vtu", .true.)
-!!        call write_meshdata_to_vtu(dst_data, PE_ID//"_dst_mesh.vtu", .true.)
-!!
-!!        !
-!!        ! After this point, we plan to overcome an important issue. The issue is
-!!        ! if a point in the destination mesh is outside of the source mesh, we cannot
-!!        ! use ESMF bilinear interpolation to transform our datafields. Hence, we first
-!!        ! create a mask in the destination mesh, with its values equal to zero on the
-!!        ! nodes outside of the source mesh domain, and one on the nodes which are inside
-!!        ! the source mesh. Afterwards, we use bilinear interpolation for mask=1, and
-!!        ! nearest node interpolation for mask=0. Thus, we need four ESMF_Fields:
-!!        !   1- An ESMF_Field on the source mesh, which is used for the mask creation
-!!        !      and also datafield interpolation.
-!!        !   2- An ESMF_Field on the destination mesh, which will be only used for mask
-!!        !      creation.
-!!        !   3- An ESMF_Field on the destination mesh, which will be used for interpolating
-!!        !      data on the destination points with mask=1.
-!!        !   4- An ESMF_Field on the destination mesh, which will be used for interpolating
-!!        !      data on the destination points with mask=0.
-!!        !
-!!        src_datafield = ESMF_FieldCreate(mesh=src_mesh, typekind=ESMF_TYPEKIND_R8, rc=rc)
-!!        dst_mask_field = ESMF_FieldCreate(mesh=dst_mesh, typekind=ESMF_TYPEKIND_R8, rc=rc)
-!!        dst_mapped_field = ESMF_FieldCreate(mesh=dst_mesh, typekind=ESMF_TYPEKIND_R8, rc=rc)
-!!        dst_unmapped_field = ESMF_FieldCreate(mesh=dst_mesh, typekind=ESMF_TYPEKIND_R8, rc=rc)
-!!
-!!        !
-!!        ! This is the preferred procedure in using ESMF to get a pointer to the
-!!        ! ESMF_Field data array, and use that pointer for creating the mask, or
-!!        ! assigning the data to field.
-!!        !
-!!        call ESMF_FieldGet(src_datafield, farrayPtr=src_fieldptr, rc=rc)
-!!        call ESMF_FieldGet(dst_mask_field, farrayPtr=dst_maskptr, rc=rc)
-!!        call ESMF_FieldGet(dst_mapped_field, farrayPtr=mapped_fieldptr, rc=rc)
-!!        call ESMF_FieldGet(dst_unmapped_field, farrayPtr=unmapped_fieldptr, rc=rc)
-!!
-!!        !
-!!        ! At this section, we construct our interpolation operator (A matrix which maps
-!!        ! source values to destination values). Here, no actual interpolation will happen,
-!!        ! only the interpolation matrices will be constructed. We construct one matrix for
-!!        ! nodal points with mask=1, and one for those points with mask=0.
-!!        !
-!!        call ESMF_FieldRegridStore(srcField=src_datafield, dstField=dst_mask_field, &
-!!            unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
-!!            routeHandle=mapped_route_handle, regridmethod=ESMF_REGRIDMETHOD_BILINEAR, &
-!!            rc=rc)
-!!        call ESMF_FieldRegridStore(srcField=src_datafield, dstField=dst_unmapped_field, &
-!!            unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
-!!            routeHandle=unmapped_route_handle, regridmethod=ESMF_REGRIDMETHOD_NEAREST_STOD, &
-!!            rc=rc)
-!!
-!!        !
-!!        ! This is the place that we create our mask on the destination mesh. By mask,
-!!        ! we mean an array with length equal to number of nodes, whose values are equal
-!!        ! to 1 at mapped nodes and 0 on unmapped nodes.
-!!        !
-!!        src_fieldptr = 1.d0
-!!        call ESMF_FieldRegrid(srcField=src_datafield, dstField=dst_mask_field, &
-!!            routehandle=mapped_route_handle, rc=rc)
-!!
-!!        !
-!!        ! As a test for our interpolation, we use the bathymetry in the source mesh as our
-!!        ! field to be inerpolated and add 1.d4 to its values at different points. Next, we
-!!        ! interpoalte, source field to destination field.
-!!        !
-!!        do i1 = 1, src_data%NumOwnedNd, 1
-!!            src_fieldptr(i1) = src_data%bathymetry(src_data%owned_to_present_nodes(i1)) + 1.d4
-!!        end do
-!!        call ESMF_FieldRegrid(srcField=src_datafield, dstField=dst_mapped_field, &
-!!            routeHandle=mapped_route_handle, rc=rc)
-!!        print *, "mapped regriding: ", rc
-!!        call ESMF_FieldRegrid(srcField=src_datafield, dstField=dst_unmapped_field, &
-!!            routeHandle=unmapped_route_handle, rc=rc)
-!!        print *, "unmapped regriding: ", rc
-!!        do i1 = 1, dst_data%NumOwnedND, 1
-!!            if (abs(dst_maskptr(i1)) < 1.d-8) then
-!!                mapped_fieldptr(i1) = unmapped_fieldptr(i1)
-!!            end if
-!!        end do
-!!
-!!        !
-!!        ! Finally, we want to visualize our results. This is not required in actual usage.
-!!        ! We only do this for our presentation. So we write two meshes in the PE=0, and
-!!        ! gather the interpolated field in PE=0. Then we plot these into vtu output.
-!!        !
-!!        if (localPet == 0) then
-!!            call extract_global_data_from_fort14("coarse/fort.14", global_src_data)
-!!            call write_meshdata_to_vtu(global_src_data, "coarse/global_mesh.vtu", .true.)
-!!            call extract_global_data_from_fort14("fine/fort.14", global_dst_data)
-!!            call write_meshdata_to_vtu(global_dst_data, "fine/global_mesh.vtu", .false.)
-!!        end if
-!!        call gather_datafield_on_root(vm1, mapped_fieldptr, 0, global_dst_data%NumNd, &
-!!            global_fieldptr)
-!!        if (localPet == 0) then
-!!            call write_node_field_to_vtu(global_fieldptr, "interp_bath", "fine/global_mesh.vtu", .true.)
-!!        end if
-!!
-!!        !
-!!        ! Finally, we have to release the memory.
-!!        !
-!!        if (localPet == 0) then
-!!            deallocate(global_fieldptr)
-!!            call destroy_meshdata(global_dst_data)
-!!            call destroy_meshdata(global_src_data)
-!!        end if
-!!        call ESMF_FieldRegridRelease(mapped_route_handle)
-!!        call ESMF_FieldRegridRelease(unmapped_route_handle)
-!!        call ESMF_FieldDestroy(src_datafield)
-!!        call ESMF_FieldDestroy(dst_mask_field)
-!!        call ESMF_FieldDestroy(dst_mapped_field)
-!!        call ESMF_FieldDestroy(dst_unmapped_field)
-!!        call ESMF_MeshDestroy(dst_mesh)
-!!        call ESMF_MeshDestroy(src_mesh)
-!!        call destroy_meshdata(src_data)
-!!        call destroy_meshdata(dst_data)
-!!
-!!        call ESMF_Finalize()
-!!
-!!    end program main
-!! \endcode
-!!
-!! Using this code, we obtain the following results:
-!! <img src="Images/coarse_bath_plus_10000.png" width=750em />
-!! <div style="text-align:center; font-size:150%;">Original data (bathymetry + 10000.) on the coarse mesh.</div>
-!! <img src="Images/fine_bath_plus_10000.png" width=750em />
-!! <div style="text-align:center; font-size:150%;">Original data (bathymetry + 10000.) on the fine mesh.</div>
-!! <img src="Images/interp_bath_plus_10000.png" width=750em />
-!! <div style="text-align:center; font-size:150%;">Interpolated bathymetry from coarse to fine mesh.</div>
-!!
+#include "c_preprocessor.h"
+
 program main
 
    use ESMF
@@ -227,7 +61,7 @@ program main
    real(ESMF_KIND_R8), parameter :: h0 = 0.05
 
 #ifdef DEBUG_MODE
-   if (localPet == 0) print *, "This is adcirpolate, in debug mode."
+   if (localPet == 0) call show_message("This is adcirpolate, in debug mode.")
 #endif
 
    !
@@ -237,7 +71,7 @@ program main
    !
    call ESMF_Initialize(vm=vm1, defaultLogFilename="test.log", &
                         logKindFlag=ESMF_LOGKIND_MULTI, rc=rc)
-   call check_error(__LINE__ - 1, __FILE__, rc)
+   CHECK_ERR_CODE(localPet, rc)
    call ESMF_VMGet(vm=vm1, localPet=localPet, petCount=petCount, rc=rc)
    write (PE_ID, "(A,I4.4)") "PE", localPet
 
@@ -248,21 +82,19 @@ program main
    !
    call extract_parallel_data_from_mesh(vm1, src_fort14_dir, src_data)
    call write_meshdata_to_vtu(src_data, PE_ID//"_src_mesh.vtu", .true.)
-   if (localPet == 0) print *, "Creating parallel ESMF mesh from ADCIRC source mesh", new_line("A")
-   call create_parallel_esmf_mesh_from_meshdata(src_data, src_mesh, rc)
-   call check_error(__LINE__, __FILE__, rc)
+   if (localPet == 0) call show_message("Creating parallel ESMF mesh from ADCIRC source mesh"//new_line("A"))
+   call create_parallel_esmf_mesh_from_meshdata(src_data, src_mesh)
 
    call extract_parallel_data_from_mesh(vm1, dst_fort14_dir, dst_data)
    call write_meshdata_to_vtu(dst_data, PE_ID//"_dst_mesh.vtu", .true.)
-   if (localPet == 0) print *, "Creating parallel ESMF mesh from ADCIRC destination mesh", new_line("A")
-   call create_parallel_esmf_mesh_from_meshdata(dst_data, dst_mesh, rc)
-   call check_error(__LINE__, __FILE__, rc)
+   if (localPet == 0) call show_message("Creating parallel ESMF mesh from ADCIRC destination mesh"//new_line("A"))
+   call create_parallel_esmf_mesh_from_meshdata(dst_data, dst_mesh)
 
    !
    ! Now, let us read data from fort.67. We also allocate the hotdata structure for
    ! destination mesh and fields.
    !
-   if (localPet == 0) print *, "Reading parallel hotdata from source directory.", new_line("A")
+   if (localPet == 0) call show_message("Reading parallel hotdata from source directory."//new_line("A"))
    call extract_hotdata_from_parallel_binary_fort_67(src_data, src_hotdata, &
                                                      src_fort14_dir, .true.)
    call allocate_hotdata(dst_hotdata, dst_data)
@@ -284,25 +116,25 @@ program main
    !   4- An ESMF_Field on the destination mesh, which will be used for interpolating
    !      data on the destination points with mask=0.
    !
-   if (localPet == 0) print *, "Creating ESMF fields:"
+   if (localPet == 0) call show_message("Creating ESMF fields:")
    the_regrid_data%src_datafield = ESMF_FieldCreate(mesh=src_mesh, &
                                                     typekind=ESMF_TYPEKIND_R8, rc=rc)
-   if (rc == 0 .AND. localPet == 0) print *, "source data field is created."
-   call check_error(__LINE__ - 2, __FILE__, rc)
+   CHECK_ERR_CODE(localPet, rc)
+   if (localPet == 0) call show_message("source data field is created.")
 
    the_regrid_data%dst_mask_field = ESMF_FieldCreate(mesh=dst_mesh, &
                                                      typekind=ESMF_TYPEKIND_R8, rc=rc)
-   if (rc == 0 .AND. localPet == 0) print *, "destination mask field is created."
+   if (rc == 0 .AND. localPet == 0) call show_message("destination mask field is created.")
    call check_error(__LINE__ - 2, __FILE__, rc)
 
    the_regrid_data%dst_mapped_field = ESMF_FieldCreate(mesh=dst_mesh, &
                                                        typekind=ESMF_TYPEKIND_R8, rc=rc)
-   if (rc == 0 .AND. localPet == 0) print *, "destination mapped data field is created."
+   if (rc == 0 .AND. localPet == 0) call show_message("destination mapped data field is created.")
    call check_error(__LINE__ - 2, __FILE__, rc)
 
    the_regrid_data%dst_unmapped_field = ESMF_FieldCreate(mesh=dst_mesh, &
                                                          typekind=ESMF_TYPEKIND_R8, rc=rc)
-   if (rc == 0 .AND. localPet == 0) print *, "destination unmapped data field is created.", new_line("A")
+   if (rc == 0 .AND. localPet == 0) call show_message("destination unmapped data field is created."//new_line("A"))
    call check_error(__LINE__ - 2, __FILE__, rc)
 
    !
@@ -332,20 +164,20 @@ program main
    ! only the interpolation matrices will be constructed. We construct one matrix for
    ! nodal points with mask=1, and one for those points with mask=0.
    !
-   if (localPet == 0) print *, "Creating ESMF regriding operators:"
+   if (localPet == 0) call show_message("Creating ESMF regriding operators:")
    call ESMF_FieldRegridStore(srcField=the_regrid_data%src_datafield, &
                               dstField=the_regrid_data%dst_mask_field, &
                               unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
                               routeHandle=the_regrid_data%mapped_route_handle, &
                               regridmethod=ESMF_REGRIDMETHOD_BILINEAR, rc=rc)
-   if (localPet == 0 .AND. rc == 0) print *, "mapped regriding operator is created."
+   if (localPet == 0 .AND. rc == 0) call show_message("mapped regriding operator is created.")
    call check_error(__LINE__, __FILE__, rc)
    call ESMF_FieldRegridStore(srcField=the_regrid_data%src_datafield, &
                               dstField=the_regrid_data%dst_unmapped_field, &
                               unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
                               routeHandle=the_regrid_data%unmapped_route_handle, &
                               regridmethod=ESMF_REGRIDMETHOD_NEAREST_STOD, rc=rc)
-   if (localPet == 0 .AND. rc == 0) print *, "unmapped regriding operator is created.", new_line("A")
+   if (localPet == 0 .AND. rc == 0) call show_message("unmapped regriding operator is created."//new_line("A"))
    call check_error(__LINE__, __FILE__, rc)
 
    !
@@ -362,31 +194,31 @@ program main
    ! Now we map the nodal values of ETA1, ETA2, ETADisc, UU2, VV2, CH1
    ! from the source mesh to the destination mesh.
    !
-   if (localPet == 0) print *, "Regriding eta1:"
+   if (localPet == 0) call show_message("Regriding eta1:")
    call regrid_datafield_of_present_nodes(the_regrid_data, src_data, dst_data, src_hotdata%ETA1)
    dst_hotdata%ETA1 = the_regrid_data%mapped_fieldptr
 
-   if (localPet == 0) print *, "Regriding eta2:"
+   if (localPet == 0) call show_message("Regriding eta2:")
    call regrid_datafield_of_present_nodes(the_regrid_data, src_data, dst_data, src_hotdata%ETA2)
    dst_hotdata%ETA2 = the_regrid_data%mapped_fieldptr
 
-   if (localPet == 0) print *, "Regriding etaDisc:"
+   if (localPet == 0) call show_message("Regriding etaDisc:")
    call regrid_datafield_of_present_nodes(the_regrid_data, src_data, dst_data, src_hotdata%ETADisc)
    dst_hotdata%ETADisc = the_regrid_data%mapped_fieldptr
 
-   if (localPet == 0) print *, "Regriding UU2:"
+   if (localPet == 0) call show_message("Regriding UU2:")
    call regrid_datafield_of_present_nodes(the_regrid_data, src_data, dst_data, src_hotdata%UU2)
    dst_hotdata%UU2 = the_regrid_data%mapped_fieldptr
 
-   if (localPet == 0) print *, "Regriding VV2:"
+   if (localPet == 0) call show_message("Regriding VV2:")
    call regrid_datafield_of_present_nodes(the_regrid_data, src_data, dst_data, src_hotdata%VV2)
    dst_hotdata%VV2 = the_regrid_data%mapped_fieldptr
 
-   if (localPet == 0) print *, "Regriding CH1:"
+   if (localPet == 0) call show_message("Regriding CH1:")
    call regrid_datafield_of_present_nodes(the_regrid_data, src_data, dst_data, src_hotdata%CH1)
    dst_hotdata%CH1 = the_regrid_data%mapped_fieldptr
 
-   if (localPet == 0) print *, "Regriding NODECODE:"
+   if (localPet == 0) call show_message("Regriding NODECODE:")
    call regrid_datafield_of_present_nodes(the_regrid_data, src_data, dst_data, src_hotdata%realNODECODE)
    dst_hotdata%realNODECODE = the_regrid_data%mapped_fieldptr
    dst_hotdata%NNODECODE = nint(dst_hotdata%realNODECODE)
@@ -402,7 +234,7 @@ program main
    call gather_dst_nodal_hotdata_on_root(dst_hotdata, global_dst_hotdata, dst_data, global_dst_data, 0)
 
    if (localPet == 0) then
-      print *, "Computing the wet and dry nodes and elements.", new_line("A")
+      call show_message("Computing the wet and dry nodes and elements."//new_line("A"))
       call compute_wet_dry(global_dst_data, global_dst_hotdata, h0)
    end if
 
@@ -482,7 +314,7 @@ program main
       global_dst_hotdata%IGWP = 0
       global_dst_hotdata%NSCOUGW = 0
 
-      print *, "Writing the global fort.67 in the destination mesh."
+      call show_message("Writing the global fort.67 in the destination mesh.")
       call write_serial_hotfile_to_fort_67(global_dst_data, global_dst_hotdata, &
                                            dst_fort14_dir, .false.)
    end if
