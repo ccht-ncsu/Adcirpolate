@@ -189,7 +189,7 @@ contains
       partmesh_filename = trim(global_fort14_dir//"/partmesh.txt")
 
       if (localPet == 0) then
-         call show_message(" Looking for global fort.14 in the directory: "//&
+         call show_message("Looking for global fort.14 in the directory: "//&
             the_data%dir_name//new_line("A"))
       endif
       inquire (FILE=fort14_filename, opened=iOpen, exist=iExist, number=iNum)
@@ -1162,6 +1162,91 @@ contains
             the_hotdata%IGPP, the_hotdata%IGWP, the_hotdata%NSCOUGW
          close (670)
       end if
+   end subroutine
+
+   !>
+   !!
+   !!
+   subroutine fast_write_serial_hotfile_to_fort_67(the_meshdata, the_hotdata, global_fort14_dir)
+      implicit none
+      type(meshdata), intent(in)   :: the_meshdata
+      type(hotdata), intent(in)    :: the_hotdata
+      character(len=*), intent(in) :: global_fort14_dir
+      integer(ESMF_KIND_I4)        :: i1, rc, ihotstp
+      character(len=200)           :: fort67_filename, fort67_ascii_filename
+
+      fort67_filename = trim(global_fort14_dir//"/fort.67")
+      open (unit=67, file=fort67_filename, action='WRITE', &
+            access='DIRECT', recl=8, iostat=rc, status='UNKNOWN')
+
+      ihotstp = 1
+      write (unit=67, REC=ihotstp) the_hotdata%InputFileFmtVn;
+      ihotstp = ihotstp + 1
+      write (unit=67, REC=ihotstp) the_hotdata%IMHS;
+      ihotstp = ihotstp + 1
+      write (unit=67, REC=ihotstp) the_hotdata%TimeLoc;
+      ihotstp = ihotstp + 1
+      write (unit=67, REC=ihotstp) the_hotdata%ITHS;
+      ihotstp = ihotstp + 1
+      write (unit=67, REC=ihotstp) the_hotdata%NP_G_IN;
+      ihotstp = ihotstp + 1
+      write (unit=67, REC=ihotstp) the_hotdata%NE_G_IN;
+      ihotstp = ihotstp + 1
+      write (unit=67, REC=ihotstp) the_hotdata%NP_A_IN;
+      ihotstp = ihotstp + 1
+      write (unit=67, REC=ihotstp) the_hotdata%NE_A_IN;
+      ihotstp = ihotstp + 1
+
+      write (unit=67) the_hotdata%ETA1(1:the_meshdata%NumNd)
+      write (unit=67) the_hotdata%ETA2(1:the_meshdata%NumNd)
+      write (unit=67) the_hotdata%ETADisc(1:the_meshdata%NumNd)
+      write (unit=67) the_hotdata%UU2(1:the_meshdata%NumNd)
+      write (unit=67) the_hotdata%VV2(1:the_meshdata%NumNd)
+      if (the_hotdata%IMHS .EQ. 10) then
+         write (unit=67) the_hotdata%CH1(1:the_meshdata%NumNd)
+         ihotstp = ihotstp + the_meshdata%NumNd
+      end if
+      write (unit=67) the_hotdata%NNODECODE(1:the_meshdata%NumNd)
+      write (unit=67) the_hotdata%NOFF(1:the_meshdata%NumEl)
+      ihotstp = ihotstp + the_meshdata%NumNd * 6 + the_meshdata%NumEl
+
+      write (unit=67, REC=ihotstp) the_hotdata%IESTP
+      ihotstp = ihotstp + 1
+      write (unit=67, REC=ihotstp) the_hotdata%NSCOUE
+      ihotstp = ihotstp + 1
+      write (unit=67, REC=ihotstp) the_hotdata%IVSTP
+      ihotstp = ihotstp + 1
+      write (unit=67, REC=ihotstp) the_hotdata%NSCOUV
+      ihotstp = ihotstp + 1
+      write (unit=67, REC=ihotstp) the_hotdata%ICSTP
+      ihotstp = ihotstp + 1
+      write (unit=67, REC=ihotstp) the_hotdata%NSCOUC
+      ihotstp = ihotstp + 1
+      write (unit=67, REC=ihotstp) the_hotdata%IPSTP
+      ihotstp = ihotstp + 1
+      write (unit=67, REC=ihotstp) the_hotdata%IWSTP
+      ihotstp = ihotstp + 1
+      write (unit=67, REC=ihotstp) the_hotdata%NSCOUM
+      ihotstp = ihotstp + 1
+      write (unit=67, REC=ihotstp) the_hotdata%IGEP
+      ihotstp = ihotstp + 1
+      write (unit=67, REC=ihotstp) the_hotdata%NSCOUGE
+      ihotstp = ihotstp + 1
+      write (unit=67, REC=ihotstp) the_hotdata%IGVP
+      ihotstp = ihotstp + 1
+      write (unit=67, REC=ihotstp) the_hotdata%NSCOUGV
+      ihotstp = ihotstp + 1
+      write (unit=67, REC=ihotstp) the_hotdata%IGCP
+      ihotstp = ihotstp + 1
+      write (unit=67, REC=ihotstp) the_hotdata%NSCOUGC
+      ihotstp = ihotstp + 1
+      write (unit=67, REC=ihotstp) the_hotdata%IGPP
+      ihotstp = ihotstp + 1
+      write (unit=67, REC=ihotstp) the_hotdata%IGWP
+      ihotstp = ihotstp + 1
+      write (unit=67, REC=ihotstp) the_hotdata%NSCOUGW
+      ihotstp = ihotstp + 1
+      close (67)
    end subroutine
 
    subroutine allocate_hotdata(the_hotdata, the_meshdata)

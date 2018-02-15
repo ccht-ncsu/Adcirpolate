@@ -69,8 +69,12 @@ program main
    ! Next we get the ESMF_VM (virtual machine) and using this VM, we obtain
    ! the ID of our local PE and total number of PE's in the communicator.
    !
+#ifdef DEBUG_MODE
    call ESMF_Initialize(vm=vm1, defaultLogFilename="test.log", &
                         logKindFlag=ESMF_LOGKIND_MULTI, rc=rc)
+#else
+   call ESMF_Initialize(vm=vm1, logKindFlag=ESMF_LOGKIND_NONE, rc=rc)
+#endif
    CHECK_ERR_CODE(localPet, rc)
    call ESMF_VMGet(vm=vm1, localPet=localPet, petCount=petCount, rc=rc)
    write (PE_ID, "(A,I4.4)") "PE", localPet
@@ -81,12 +85,16 @@ program main
    ! we write the mesh into parallel vtu outputs.
    !
    call extract_parallel_data_from_mesh(vm1, src_fort14_dir, src_data)
+#ifdef DEBUG_MODE
    call write_meshdata_to_vtu(src_data, PE_ID//"_src_mesh.vtu", .true.)
+#endif
    if (localPet == 0) call show_message("Creating parallel ESMF mesh from ADCIRC source mesh"//new_line("A"))
    call create_parallel_esmf_mesh_from_meshdata(src_data, src_mesh)
 
    call extract_parallel_data_from_mesh(vm1, dst_fort14_dir, dst_data)
+#ifdef DEBUG_MODE
    call write_meshdata_to_vtu(dst_data, PE_ID//"_dst_mesh.vtu", .true.)
+#endif
    if (localPet == 0) call show_message("Creating parallel ESMF mesh from ADCIRC destination mesh"//new_line("A"))
    call create_parallel_esmf_mesh_from_meshdata(dst_data, dst_mesh)
 
@@ -230,7 +238,9 @@ program main
       call allocate_hotdata(global_dst_hotdata, global_dst_data)
    end if
 
+#ifdef DEBUG_MODE
    call gather_src_nodal_hotdata_on_root(src_hotdata, global_src_hotdata, src_data, global_src_data, 0)
+#endif
    call gather_dst_nodal_hotdata_on_root(dst_hotdata, global_dst_hotdata, dst_data, global_dst_data, 0)
 
    if (localPet == 0) then
@@ -238,6 +248,7 @@ program main
       call compute_wet_dry(global_dst_data, global_dst_hotdata, h0)
    end if
 
+#ifdef DEBUG_MODE
    !
    ! Finally, we want to visualize our results. This is not required in actual usage.
    ! We only do this for our presentation. So we write two meshes in the PE=0, and
@@ -271,6 +282,7 @@ program main
       call write_node_field_to_vtu(global_dst_hotdata%VV2, &
                                    "VV2", dst_data%dir_name//"/global_mesh.vtu", .true.)
    end if
+#endif
 
    !
    ! Now we write the hotstart mesh for the destination mesh.
@@ -293,8 +305,7 @@ program main
       ! (such as ETA, UU, VV, ...).
       !
       ! global_dst_hotdata%NNODECODE = 1
-      !
-      global_dst_hotdata%NOFF = 1
+      ! global_dst_hotdata%NOFF = 1
       global_dst_hotdata%IESTP = 0
       global_dst_hotdata%NSCOUE = 0
       global_dst_hotdata%IVSTP = 0
