@@ -5,7 +5,7 @@ high resolution in areas where no important phenomenon is going on. If you do no
 ADCIRC, or its hotstart files, you are in the wrong place !
 
 - [Prerequisites](##Prerequisites)
-- [Running the code](##Running the code)
+- [Running the code](##Running-the-code)
 
 ## Prerequisites
 In order to run this code, you need MPI and ESMF libraries. The program is to be built with the same MPI library that is used to build ESMF. You also need to set the following environment variables, and run cmake:
