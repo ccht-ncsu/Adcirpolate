@@ -770,43 +770,43 @@ contains
          allocate (int_globalfieldarray_ptr(global_meshdata%NumNd))
       end if
 
-      if (localPet == root) call show_message("Gathering src eta1 on root:")
+      if (localPet == root) call show_message("Gathering dst eta1 on root:")
       localfieldarray_ptr = localized_hotdata%ETA1
       call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
                                     root, globalfieldarray_ptr, localized_meshdata%dir_name)
       if (localPet == root) global_hotdata%ETA1 = globalfieldarray_ptr
       !
-      if (localPet == root) call show_message("Gathering src eta2 on root:")
+      if (localPet == root) call show_message("Gathering dst eta2 on root:")
       localfieldarray_ptr = localized_hotdata%ETA2
       call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
                                     root, globalfieldarray_ptr, localized_meshdata%dir_name)
       if (localPet == root) global_hotdata%ETA2 = globalfieldarray_ptr
       !
-      if (localPet == root) call show_message("Gathering src etaDisc on root:")
+      if (localPet == root) call show_message("Gathering dst etaDisc on root:")
       localfieldarray_ptr = localized_hotdata%ETADisc
       call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
                                     root, globalfieldarray_ptr, localized_meshdata%dir_name)
       if (localPet == root) global_hotdata%ETADisc = globalfieldarray_ptr
       !
-      if (localPet == root) call show_message("Gathering src UU2 on root:")
+      if (localPet == root) call show_message("Gathering dst UU2 on root:")
       localfieldarray_ptr = localized_hotdata%UU2
       call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
                                     root, globalfieldarray_ptr, localized_meshdata%dir_name)
       if (localPet == root) global_hotdata%UU2 = globalfieldarray_ptr
       !
-      if (localPet == root) call show_message("Gathering src VV2 on root:")
+      if (localPet == root) call show_message("Gathering dst VV2 on root:")
       localfieldarray_ptr = localized_hotdata%VV2
       call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
                                     root, globalfieldarray_ptr, localized_meshdata%dir_name)
       if (localPet == root) global_hotdata%VV2 = globalfieldarray_ptr
       !
-      if (localPet == root) call show_message("Gathering src CH1 on root:")
+      if (localPet == root) call show_message("Gathering dst CH1 on root:")
       localfieldarray_ptr = localized_hotdata%CH1
       call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
                                     root, globalfieldarray_ptr, localized_meshdata%dir_name)
       if (localPet == root) global_hotdata%CH1 = globalfieldarray_ptr
       !
-      if (localPet == root) call show_message("Gathering src NODECODE on root:")
+      if (localPet == root) call show_message("Gathering dst NODECODE on root:")
       int_localfieldarray_ptr = localized_hotdata%NNODECODE
       call gather_int_datafield_on_root(localized_meshdata%vm, int_localfieldarray_ptr, &
                                         root, int_globalfieldarray_ptr, localized_meshdata%dir_name)
@@ -835,43 +835,43 @@ contains
          allocate (int_globalfieldarray_ptr(global_meshdata%NumNd))
       end if
 
-      if (localPet == root) call show_message("Gathering dst eta1 on root:")
+      if (localPet == root) call show_message("Gathering src eta1 on root:")
       localfieldarray_ptr(:) = localized_hotdata%ETA1(localized_meshdata%owned_to_present_nodes(:))
       call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
                                     root, globalfieldarray_ptr, localized_meshdata%dir_name)
       if (localPet == root) global_hotdata%ETA1 = globalfieldarray_ptr
       !
-      if (localPet == root) call show_message("Gathering dst eta2 on root:")
+      if (localPet == root) call show_message("Gathering src eta2 on root:")
       localfieldarray_ptr(:) = localized_hotdata%ETA2(localized_meshdata%owned_to_present_nodes(:))
       call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
                                     root, globalfieldarray_ptr, localized_meshdata%dir_name)
       if (localPet == root) global_hotdata%ETA2 = globalfieldarray_ptr
       !
-      if (localPet == root) call show_message("Gathering dst etaDisc on root:")
+      if (localPet == root) call show_message("Gathering src etaDisc on root:")
       localfieldarray_ptr(:) = localized_hotdata%ETADisc(localized_meshdata%owned_to_present_nodes(:))
       call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
                                     root, globalfieldarray_ptr, localized_meshdata%dir_name)
       if (localPet == root) global_hotdata%ETADisc = globalfieldarray_ptr
       !
-      if (localPet == root) call show_message("Gathering dst UU2 on root:")
+      if (localPet == root) call show_message("Gathering src UU2 on root:")
       localfieldarray_ptr(:) = localized_hotdata%UU2(localized_meshdata%owned_to_present_nodes(:))
       call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
                                     root, globalfieldarray_ptr, localized_meshdata%dir_name)
       if (localPet == root) global_hotdata%UU2 = globalfieldarray_ptr
       !
-      if (localPet == root) call show_message("Gathering dst VV2 on root:")
+      if (localPet == root) call show_message("Gathering src VV2 on root:")
       localfieldarray_ptr(:) = localized_hotdata%VV2(localized_meshdata%owned_to_present_nodes(:))
       call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
                                     root, globalfieldarray_ptr, localized_meshdata%dir_name)
       if (localPet == root) global_hotdata%VV2 = globalfieldarray_ptr
       !
-      if (localPet == root) call show_message("Gathering dst CH1 on root:")
+      if (localPet == root) call show_message("Gathering src CH1 on root:")
       localfieldarray_ptr(:) = localized_hotdata%CH1(localized_meshdata%owned_to_present_nodes(:))
       call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
                                     root, globalfieldarray_ptr, localized_meshdata%dir_name)
       if (localPet == root) global_hotdata%CH1 = globalfieldarray_ptr
       !
-      if (localPet == root) call show_message("Gathering dst NODECODE on root:")
+      if (localPet == root) call show_message("Gathering src NODECODE on root:")
       int_localfieldarray_ptr(:) = localized_hotdata%NNODECODE(localized_meshdata%owned_to_present_nodes(:))
       call gather_int_datafield_on_root(localized_meshdata%vm, int_localfieldarray_ptr, &
                                         root, int_globalfieldarray_ptr, localized_meshdata%dir_name)
@@ -1197,18 +1197,24 @@ contains
       write (unit=67, REC=ihotstp) the_hotdata%NE_A_IN;
       ihotstp = ihotstp + 1
 
-      write (unit=67) the_hotdata%ETA1(1:the_meshdata%NumNd)
+      write (unit=67, rec=ihotstp) the_hotdata%ETA1(1:the_meshdata%NumNd)
+      ihotstp = ihotstp + the_meshdata%NumNd
       write (unit=67) the_hotdata%ETA2(1:the_meshdata%NumNd)
+      ihotstp = ihotstp + the_meshdata%NumNd
       write (unit=67) the_hotdata%ETADisc(1:the_meshdata%NumNd)
+      ihotstp = ihotstp + the_meshdata%NumNd
       write (unit=67) the_hotdata%UU2(1:the_meshdata%NumNd)
+      ihotstp = ihotstp + the_meshdata%NumNd
       write (unit=67) the_hotdata%VV2(1:the_meshdata%NumNd)
+      ihotstp = ihotstp + the_meshdata%NumNd
       if (the_hotdata%IMHS .EQ. 10) then
          write (unit=67) the_hotdata%CH1(1:the_meshdata%NumNd)
          ihotstp = ihotstp + the_meshdata%NumNd
       end if
       write (unit=67) the_hotdata%NNODECODE(1:the_meshdata%NumNd)
+      ihotstp = ihotstp + the_meshdata%NumNd
       write (unit=67) the_hotdata%NOFF(1:the_meshdata%NumEl)
-      ihotstp = ihotstp + the_meshdata%NumNd * 6 + the_meshdata%NumEl
+      ihotstp = ihotstp + the_meshdata%NumEl
 
       write (unit=67, REC=ihotstp) the_hotdata%IESTP
       ihotstp = ihotstp + 1

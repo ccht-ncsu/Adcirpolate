@@ -60,16 +60,12 @@ program main
    character(len=*), parameter   :: src_fort14_dir = "coarse/", dst_fort14_dir = "fine/"
    real(ESMF_KIND_R8), parameter :: h0 = 0.05
 
-#ifdef DEBUG_MODE
-   if (localPet == 0) call show_message("This is adcirpolate, in debug mode.")
-#endif
-
    !
    ! Any program using ESMF library should start with ESMF_Initialize(...).
    ! Next we get the ESMF_VM (virtual machine) and using this VM, we obtain
    ! the ID of our local PE and total number of PE's in the communicator.
    !
-#ifdef DEBUG_MODE
+#ifdef DEBUG_MANIAC
    call ESMF_Initialize(vm=vm1, defaultLogFilename="test.log", &
                         logKindFlag=ESMF_LOGKIND_MULTI, rc=rc)
 #else
@@ -85,14 +81,14 @@ program main
    ! we write the mesh into parallel vtu outputs.
    !
    call extract_parallel_data_from_mesh(vm1, src_fort14_dir, src_data)
-#ifdef DEBUG_MODE
+#ifdef DEBUG_MANIAC
    call write_meshdata_to_vtu(src_data, PE_ID//"_src_mesh.vtu", .true.)
 #endif
    if (localPet == 0) call show_message("Creating parallel ESMF mesh from ADCIRC source mesh"//new_line("A"))
    call create_parallel_esmf_mesh_from_meshdata(src_data, src_mesh)
 
    call extract_parallel_data_from_mesh(vm1, dst_fort14_dir, dst_data)
-#ifdef DEBUG_MODE
+#ifdef DEBUG_MANIAC
    call write_meshdata_to_vtu(dst_data, PE_ID//"_dst_mesh.vtu", .true.)
 #endif
    if (localPet == 0) call show_message("Creating parallel ESMF mesh from ADCIRC destination mesh"//new_line("A"))
@@ -184,7 +180,7 @@ program main
                               dstField=the_regrid_data%dst_unmapped_field, &
                               unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
                               routeHandle=the_regrid_data%unmapped_route_handle, &
-                              regridmethod=ESMF_REGRIDMETHOD_NEAREST_STOD, rc=rc)
+                              regridmethod=ESMF_REGRIDMETHOD_NEAREST_DTOS, rc=rc)
    if (localPet == 0 .AND. rc == 0) call show_message("unmapped regriding operator is created."//new_line("A"))
    call check_error(__LINE__, __FILE__, rc)
 
@@ -326,8 +322,14 @@ program main
       global_dst_hotdata%NSCOUGW = 0
 
       call show_message("Writing the global fort.67 in the destination mesh.")
+#ifdef DEBUG_MODE
+      call write_serial_hotfile_to_fort_67(global_dst_data, global_dst_hotdata, &
+                                           dst_fort14_dir, .true.)
+#else
       call write_serial_hotfile_to_fort_67(global_dst_data, global_dst_hotdata, &
                                            dst_fort14_dir, .false.)
+#endif
+
    end if
 
    !
