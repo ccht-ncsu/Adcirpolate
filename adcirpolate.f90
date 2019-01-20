@@ -1270,13 +1270,20 @@ contains
       allocate (the_hotdata%NOFF(the_meshdata%NumEl))
    end subroutine
 
-   subroutine regrid_datafield_of_present_nodes(the_regrid_data, src_data, dst_data, src_array_of_present_nodes)
+   subroutine regrid_datafield_of_present_nodes(the_regrid_data, src_data, dst_data, src_array_of_present_nodes, print_unmapped)
       implicit none
       type(regrid_data), intent(inout)    :: the_regrid_data
       type(meshdata)                      :: src_data, dst_data
       real(ESMF_KIND_R8), intent(in)      :: src_array_of_present_nodes(:)
       integer(ESMF_KIND_I4)               :: i1, localPet, petCount, rc
       character(len=4)                    :: rc_str
+      logical, optional                   :: print_unmapped
+      logical                             :: pls_print
+      if (present(print_unmapped)) then
+         pls_print = print_unmapped
+      else
+         pls_print = .false.
+      endif
 
       call ESMF_VMGet(vm=src_data%vm, localPet=localPet, petCount=petCount, rc=rc)
       do i1 = 1, src_data%NumOwnedNd, 1
@@ -1298,6 +1305,7 @@ contains
             the_regrid_data%mapped_fieldptr(i1) = the_regrid_data%unmapped_fieldptr(i1)
          end if
       end do
+      call MPI_Barrier(MPI_COMM_WORLD, rc)
    end subroutine
 
    !> \details This function simply deallocates the arrays created in the \c meshdata object

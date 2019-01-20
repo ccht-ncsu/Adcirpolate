@@ -1,20 +1,20 @@
-cmake_minimum_required (VERSION 2.8)
+cmake_minimum_required (VERSION 3.0)
 project (adcirpolate Fortran)
 
 set (CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/CMakeModules")
 
 find_package (ESMF)
 
-if (DEFINED WITH_HDF5 AND NOT DEFINED ENV{HDF5_DIR})
-  message (FATAL_ERROR "\n${Esc}[1;31m!! Error: You have enabled HDF5 linking, \
-                   but you have not defined HDF5_DIR. Try something like: ${Esc}[m\
-                   export HDF_DIR=/path/to/hdf5 && cmake ${CMAKE_SOURCE_DIR}")
-endif ()
-
-if (DEFINED ENV{HDF5_DIR})
-  set (HDF5_ROOT ${HDF5_DIR})
-  find_package (HDF5)
-endif ()
+# if (DEFINED WITH_HDF5 AND NOT DEFINED ENV{HDF5_DIR})
+#   message (FATAL_ERROR "\n${Esc}[1;31m!! Error: You have enabled HDF5 linking, \
+#                    but you have not defined HDF5_DIR. Try something like: ${Esc}[m\
+#                    export HDF_DIR=/path/to/hdf5 && cmake ${CMAKE_SOURCE_DIR}")
+# endif ()
+# 
+# if (DEFINED ENV{HDF5_DIR})
+#   set (HDF5_ROOT ${HDF5_DIR})
+#   find_package (HDF5)
+# endif ()
 
 add_executable(${PROJECT_NAME} adcirpolate.f90
                main.f90 wetdry.f90 errors_and_msgs.f90

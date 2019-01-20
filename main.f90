@@ -180,7 +180,7 @@ program main
                               dstField=the_regrid_data%dst_unmapped_field, &
                               unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
                               routeHandle=the_regrid_data%unmapped_route_handle, &
-                              regridmethod=ESMF_REGRIDMETHOD_NEAREST_DTOS, rc=rc)
+                              regridmethod=ESMF_REGRIDMETHOD_NEAREST_STOD, rc=rc)
    if (localPet == 0 .AND. rc == 0) call show_message("unmapped regriding operator is created."//new_line("A"))
    call check_error(__LINE__, __FILE__, rc)
 
