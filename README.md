@@ -5,6 +5,7 @@ high resolution in areas where no important phenomenon is going on. If you do no
 ADCIRC, or its hotstart files, you are in the wrong place !
 
 - [Prerequisites](##Prerequisites)
+- [CMake and Fortran version requirements](##CMake-and-Fortran-version-requirements)
 - [Running the code](##Running-the-code)
 
 ## Prerequisites
