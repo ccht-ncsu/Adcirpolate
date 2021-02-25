@@ -24,16 +24,16 @@ Adcirpolate should be executed in a directory with two folders named `coarse` an
 
 ## Compiling and Running ADCIRC with ADCIRPOLATE
 
-Step 1: Compile Necessary Source Code - ADCIRC
+**Step 1: Compile Necessary Source Code - ADCIRC**
 
 Load file ADCIRC source code into workspace and unzip. Go to the work folder, this is where we will perform the compiling of the ADCIRC source code. Type:
 
-make clean 
-make clobber
+	make clean 
+	make clobber
 
 Then, go into the cmplrflags.mk file and make sure the correct machine is set and there are debug lines (if needed line 116):
 
-DP            :=  -DREAL8 -DLINUX -DCSCA -DCMPI -DDEBUG_WARN_ELEV
+	DP            :=  -DREAL8 -DLINUX -DCSCA -DCMPI -DDEBUG_WARN_ELEV
 
 I also had to switch the NetCDF location of files as follows (lines 179-181): 
 
@@ -45,15 +45,15 @@ I also had to switch the NetCDF location of files as follows (lines 179-181):
 
 Then we compile:
 
-cmake/3.16.3
-intel/2017.1.132
-intel_mpi/2017
-PrgEnv-intel/2017.1.132
-hdf5/1.10.2-intel2017
-netcdf/4.6.1-intel2017
+	cmake/3.16.3
+	intel/2017.1.132
+	intel_mpi/2017
+	PrgEnv-intel/2017.1.132
+	hdf5/1.10.2-intel2017
+	netcdf/4.6.1-intel2017
 
-make adcprep MACHINENAME=henry2 NETCDF=enable NETCDF4=enable NETCDF4_COMPRESSION=enable
-make padcirc MACHINENAME=henry2 NETCDF=enable NETCDF4=enable NETCDF4_COMPRESSION=enable
+	make adcprep MACHINENAME=henry2 NETCDF=enable NETCDF4=enable NETCDF4_COMPRESSION=enable
+	make padcirc MACHINENAME=henry2 NETCDF=enable NETCDF4=enable NETCDF4_COMPRESSION=enable
 
 I also made it so all of the above modules are automatically loaded when I open putty by adding it to my ./tcshrc file. Now the ADCIRC source code will have the adcprep and padcirc executables. 
 
@@ -61,9 +61,9 @@ The next step is to load esmf. This takes quite some time. Gather the esmf files
 
 Then, when this is complete, the next step is to install adcirpolate. This must be done AFTER esmf is installed because we need the location of a specific file for the compilation. This is similar to the esmf compiling, start by creating a folder adcirpolate and move the adcirpolate.zip and the submission script into the folder. THEN you need to go into the submission script and change the following line to match where the associated esmf file is located (all one line):
 
-setenv ESMF_CONFIG_FILE /usr/local/usrapps/jcdietri/esmf/installl_debug/lib/libO/Linux.intel.64.intelmpi.default/esmf.mk
+	setenv ESMF_CONFIG_FILE /usr/local/usrapps/jcdietri/esmf/installl_debug/lib/libO/Linux.intel.64.intelmpi.default/esmf.mk
 
-Step 2: Gather Run Input Files - Tidal Spinup
+**Step 2: Gather Run Input Files - Tidal Spinup **
 
 For a tidal spinup file we just need tidal constituents for the time span of the combined simulations. Tidal spinup runs are typically 15 days in length. Files needed:
 
@@ -100,7 +100,7 @@ Also, mind the number of cores within both submissions scripts as well as the wr
 
 Once you are satisfied with the files submit the adcprep.csh first and then check the prepped files. Then run the padcirc.csh
 
-Step 3: Initial Run with Storm - Coarse Resolution Simulation
+**Step 3: Initial Run with Storm - Coarse Resolution Simulation**
 
 For the first part of the simulation with storm winds, we need all of the files that are used above (tidal spinup-not these exact files) plus a few additional files. The additional files contain the storm wind information. For hindcasts, we would typically use the OWI winds from ADCIRC as they are most accurate. During a real time forecasting mode, we would use the parameterized wind field from ADCIRC. These come in the form of a fort.22* file. The specific number specifies the spatial scale of the winds, with the fort.22 being the winds from ADCIRC. Additionally, we have some other files for the submission scripts and an additional submission script due to this being a hot start from the tidal spin up performed above. Not all submission will need these files, it depends on how you have your submission scripts (adcprep.csh and padcirc.csh) written. Another important thing to note, as of 2/25/21 adcirpolate needs to have binary/localized hotstart files. 
 
@@ -123,7 +123,7 @@ padcirc.csh
 adchot.csh
 in.prep1
 in.prep2
-	in.prephot
+in.prephot
 
 Same for above, check all the files and make sure they are set-up properly. For this first run, assuming it is the initial ‘switch’ before moving to another mesh using adcirpolate, there will be several things that need to be set-up depending on the parameters of the simulation. 
 
@@ -174,44 +174,44 @@ Examples of the submission scripts are below. Main things that would need changi
 
 adcprep.csh
 
-#! /bin/csh
-#BSUB -J adcprep
-#BSUB -o adcprep.%J
-#BSUB -e adcprep.%J
-#BSUB -W 15
-#BSUB -n 1
-#BSUB -q queuename
+	#! /bin/csh
+	#BSUB -J adcprep
+	#BSUB -o adcprep.%J
+	#BSUB -e adcprep.%J
+	#BSUB -W 15
+	#BSUB -n 1
+	#BSUB -q queuename
 
-./adcprep <in.prep1
-./adcprep <in.prep2
+	./adcprep <in.prep1
+	./adcprep <in.prep2
 
 adchot.csh
 
-#! /bin/csh
-#BSUB -J adcprep
-#BSUB -o adcprep.%J
-#BSUB -e adcprep.%J
-#BSUB -W 15
-#BSUB -n 1
-#BSUB -q queue name
+	#! /bin/csh
+	#BSUB -J adcprep
+	#BSUB -o adcprep.%J
+	#BSUB -e adcprep.%J
+	#BSUB -W 15
+	#BSUB -n 1
+	#BSUB -q queue name
 
-./adcprep <in.prephot
+	./adcprep <in.prephot
 
 padcirc.csh
 
-#! /bin/csh
-#BSUB -J padcirc
-#BSUB -o padcirc.%J
-#BSUB -e padcirc.%J
-#BSUB -W 2880
-#BSUB -n 320
-#BSUB -q queuename
+	#! /bin/csh
+	#BSUB -J padcirc
+	#BSUB -o padcirc.%J
+	#BSUB -e padcirc.%J
+	#BSUB -W 2880
+	#BSUB -n 320
+	#BSUB -q queuename
 
-mpirun ./padcirc -W 10
+	mpirun ./padcirc -W 10
 
 Once all of the files are set and ready. Submit adcprep.csh and check that all the PE directories are correctly generated. After adcprep is run, we submit adchot.csh to put the hotstart file into the PE directories. This is only for ascii type hotstart files, if we have a netCDF type file, we do not need to perform this step. When that has run successfully, we then submit padcirc.csh
 
-Step 4: Adcirpolate
+**Step 4: Adcirpolate**
 
 Set up the files in a specific way, there needs to be a directory named coarse and a directory named fine. Within the coarse directory, place all of the step three run files. It is easiest to just rename the directory they are already in and then create an empty fine directory. 
 
@@ -233,17 +233,17 @@ The number of cores should match what is in the adcprep.csh submission script, n
 
 hot_reader.csh
 
-#! /bin/csh
-#BSUB -J adcirpolate
-#BSUB -o adcirpolate.%J
-#BSUB -e adcirpolate.%J
-#BSUB -W 2880
-#BSUB -n 522
-#BSUB -q queue
+	#! /bin/csh
+	#BSUB -J adcirpolate
+	#BSUB -o adcirpolate.%J
+	#BSUB -e adcirpolate.%J
+	#BSUB -W 2880
+	#BSUB -n 522
+	#BSUB -q queue
 
-mpirun ./adcirpolate
+	mpirun ./adcirpolate
 
-Step 5: Second Run with Storm - High-Resolution Simulation
+**Step 5: Second Run with Storm - High-Resolution Simulation**
 
 When the above adcirpolate is complete, the fine simulation is ready to be performed. Go to the fine directory for this simulation and delete all of the PE directories. Then submit the submissions scripts in the following order:
 
