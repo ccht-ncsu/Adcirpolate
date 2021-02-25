@@ -63,7 +63,7 @@ Then, when this is complete, the next step is to install adcirpolate. This must 
 
 	setenv ESMF_CONFIG_FILE /usr/local/usrapps/jcdietri/esmf/installl_debug/lib/libO/Linux.intel.64.intelmpi.default/esmf.mk
 
-**Step 2: Gather Run Input Files - Tidal Spinup **
+**Step 2: Gather Run Input Files - Tidal Spinup**
 
 For a tidal spinup file we just need tidal constituents for the time span of the combined simulations. Tidal spinup runs are typically 15 days in length. Files needed:
 
