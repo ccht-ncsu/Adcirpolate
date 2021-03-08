@@ -18,6 +18,7 @@ find_package (ESMF)
 
 add_executable(${PROJECT_NAME} adcirpolate.f90
                main.f90 wetdry.f90 errors_and_msgs.f90
+               netcdfio.f90
                c_preprocessor.h)
 
 set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}\

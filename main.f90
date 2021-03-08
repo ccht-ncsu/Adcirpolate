@@ -47,6 +47,8 @@ program main
    use MPI
    use adcirpolate
    use wetdry
+!Casey 210305
+   use netcdfio
 
    implicit none
    real(ESMF_KIND_R8), pointer   :: global_fieldptr(:), aux_global_fieldptr(:)
@@ -59,6 +61,9 @@ program main
    character(len=6)              :: PE_ID
    character(len=*), parameter   :: src_fort14_dir = "coarse/", dst_fort14_dir = "fine/"
    real(ESMF_KIND_R8), parameter :: h0 = 0.05
+
+!Casey 210308
+   logical                       :: write_netcdf = .FALSE.
 
    !
    ! Any program using ESMF library should start with ESMF_Initialize(...).
@@ -322,13 +327,18 @@ program main
       global_dst_hotdata%NSCOUGW = 0
 
       call show_message("Writing the global fort.67 in the destination mesh.")
+!Casey 210308
+      if(write_netcdf)then
 #ifdef DEBUG_MODE
-      call write_serial_hotfile_to_fort_67(global_dst_data, global_dst_hotdata, &
+        call write_serial_hotfile_to_fort_67(global_dst_data, global_dst_hotdata, &
                                            dst_fort14_dir, .true.)
 #else
-      call write_serial_hotfile_to_fort_67(global_dst_data, global_dst_hotdata, &
+        call write_serial_hotfile_to_fort_67(global_dst_data, global_dst_hotdata, &
                                            dst_fort14_dir, .false.)
 #endif
+      endif
+!Casey 210305
+      call write_netcdf_hotfile(global_dst_data, global_dst_hotdata)
 
    end if
 
