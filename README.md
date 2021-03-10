@@ -35,7 +35,7 @@ Then, go into the cmplrflags.mk file and make sure the correct machine is set an
 
 	DP            :=  -DREAL8 -DLINUX -DCSCA -DCMPI -DDEBUG_WARN_ELEV
 
-I also had to switch the NetCDF location of files as follows (lines 179-181): 
+I also had to switch the NetCDF location of files as follows (lines 179-181). This may be specific by machine: 
 
      ifeq ($(MACHINENAME),henry2)
         NETCDFHOME     :=/usr/local/apps/netcdf-centos7/4.6.1-intel2017/
@@ -55,7 +55,7 @@ Then we compile:
 	make adcprep MACHINENAME=henry2 NETCDF=enable NETCDF4=enable NETCDF4_COMPRESSION=enable
 	make padcirc MACHINENAME=henry2 NETCDF=enable NETCDF4=enable NETCDF4_COMPRESSION=enable
 
-I also made it so all of the above modules are automatically loaded when I open putty by adding it to my ./tcshrc file. Now the ADCIRC source code will have the adcprep and padcirc executables. 
+You can also made it so all of the above modules are automatically loaded when opening the connection by adding it to a ./tcshrc file or similar. Now the ADCIRC source code will have the adcprep and padcirc executables. 
 
 The next step is to load esmf. This takes quite some time. Gather the esmf files, create an esmf folder and then load the submission script and the zip file in this folder. Then submit the submission script and wait. 
 
@@ -67,32 +67,32 @@ Then, when this is complete, the next step is to install adcirpolate. This must 
 
 For a tidal spinup file we just need tidal constituents for the time span of the combined simulations. Tidal spinup runs are typically 15 days in length. Files needed:
 
-Mesh file - fort.13
-Nodal attributes file - fort.14
-Main control file - fort.15
+Mesh file - fort.13  
+Nodal attributes file - fort.14  
+Main control file - fort.15  
 
 For Hurricane Matthew in particular (and possibly others) there is an HSOFS offset file for the vertical datum. 
 
-HSOFS_Matthew_Offsetsurface
+HSOFS_Matthew_Offsetsurface  
 
 Then the executable files and the associated submission script files. 
 
-adcprep
-adcprep.csh
-padcirc
-padcirc.csh
+adcprep  
+adcprep.csh  
+padcirc  
+padcirc.csh  
 
 Once all of these files have been collected, check them over and make sure they are set up specifically for your storm and time span and that you have the correct mesh. Som components of note 
 
-fort.15
+fort.15  
 
 Some of the parameters to note:
-IHOT 0 - since no hotstart
-RNDAY 15.0 for tidal spinup
-DT 1.0 for HSOFS, 0.5 for FEMA-HR
-NOUTE 3 for netCDF files
-NSPOOL/V/E/GV/GE - 3600 means every hour water elevations written
-NHSINC - 86400 means hotstart written once a day, every 24 hours
+IHOT 0 - since no hotstart  
+RNDAY 15.0 for tidal spinup  
+DT 1.0 for HSOFS, 0.5 for FEMA-HR  
+NOUTE 3 for netCDF files  
+NSPOOL/V/E/GV/GE - 3600 means every hour water elevations written  
+NHSINC - 86400 means hotstart written once a day, every 24 hours  
 
 Cores
 
@@ -106,28 +106,28 @@ For the first part of the simulation with storm winds, we need all of the files 
 
 Files needed:
 
-fort.13
-fort.14
-fort.15
-fort.22
-fort.221
-fort.222
-fort.223
-fort.224
-fort.67/68 (from tidal spinup run)
-HSOFS_Matthew_Offsetsurface (if using the HSOFS mesh)
-adcprep
-adcprep.csh
-padcirc
-padcirc.csh
-adchot.csh
-in.prep1
-in.prep2
-in.prephot
+fort.13  
+fort.14  
+fort.15  
+fort.22  
+fort.221  
+fort.222   
+fort.223  
+fort.224  
+fort.67/68 (from tidal spinup run)  
+HSOFS_Matthew_Offsetsurface (if using the HSOFS mesh)  
+adcprep  
+adcprep.csh  
+padcirc  
+padcirc.csh  
+adchot.csh  
+in.prep1  
+in.prep2  
+in.prephot  
 
 Same for above, check all the files and make sure they are set-up properly. For this first run, assuming it is the initial ‘switch’ before moving to another mesh using adcirpolate, there will be several things that need to be set-up depending on the parameters of the simulation. 
 
-fort.15
+fort.15  
 
 Some of the parameters to note:
 IHOT 67 - since there is hotstart file for this simulation, put either 67 or 68, check files
