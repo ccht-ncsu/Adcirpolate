@@ -1,0 +1,15 @@
+#!/bin/bash
+#SBATCH -J Matthew-OW-6days
+#SBATCH -A TG-DMS080016N
+#SBATCH -o padcirc.o%j
+#SBATCH -e padcirc.o%j
+#SBATCH -p skx-normal
+#SBATCH -N 3
+#SBATCH -n 128
+#SBATCH -t 10:00:00
+
+#SBATCH --mail-user=apoisso@ncsu.edu
+#SBATCH --mail-type=begin        # email me when the job starts
+#SBATCH --mail-type=end          # email me when the job finishes
+
+ibrun ./padcirc -W 10
