@@ -160,11 +160,11 @@ fort.15
 
 IHOT = 0 - for no hotstart  
 RNDAY = 15.0 - run time length for tidal spinup  
-DT = 1.0 for HSOFS, 0.5 for FEMA-HR (time step sec)
-NOUTE = 3 for netCDF files  (5 = netCDF4, 1 = ASCII, 2 = Binary)
-NSPOOL/V/E/GV/GE = 3600 means every hour water elevations written  
-NHSINC = 86400 means hotstart written once a day/every 24 hours 
-NHSTAR = 1, same options as for NOUTE, needs to be 1 for ADCIRPOLATE 
+DT = 1.0 for HSOFS, 0.5 for FEMA-HR (time step sec)  
+NOUTE = 3 for netCDF files  (5 = netCDF4, 1 = ASCII, 2 = Binary)  
+NSPOOL/V/E/GV/GE = 3600 means every hour water elevations written   
+NHSINC = 86400 means hotstart written once a day/every 24 hours   
+NHSTAR = 1, same options as for NOUTE, needs to be 1 for ADCIRPOLATE   
 
 Cores
 
@@ -205,12 +205,12 @@ IHOT = 67 - since there is hotstart file for this simulation, put either 67 or 6
 RNDAY = 15+X where X is the length of the first part of the hotstart/storm run on this coarse mesh  
 DT = 1.0 for HSOFS & OW, 0.5 for FEMA-HR  
 NWS = -12 for including OWI winds for Matthew  
-WTIMINC = 900 300 , for every 15 min/900 seconds reading of wind file, 300 ignore  
-NOUTE = 5 for netCDF4 files, 1 for ASCII 
+WTIMINC = 900 300 , for every 15 min/900 seconds reading of wind file, 300 ignore   
+NOUTE = 5 for netCDF4 files, 1 for ASCII   
 TOUTSE, TOUTFE = 0.0 99.0, set for start and end time, using 0 and 99 covers all the bases   
-NSPOOL/V/E/GV/GE = 3600 means every hour water elevations written  
-NHSINC = 43200 means hotstart written once every half a day, important if X is not a full day  
-NHSTAR = 1, same options as for NOUTE, needs to be 1 for ADCIRPOLATE
+NSPOOL/V/E/GV/GE = 3600 means every hour water elevations written   
+NHSINC = 43200 means hotstart written once every half a day, important if X is not a full day   
+NHSTAR = 1, same options as for NOUTE, needs to be 1 for ADCIRPOLATE 
 
 ***Reiteration - make sure that the fort.15 is writing binary/ascii hotstart files (NHSTAR). This is necessary for ADCIRPOLATE to work properly.***
 
