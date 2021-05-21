@@ -6,7 +6,257 @@
 
       real(8), parameter :: doubleval = -99999.d0
 
+
+
       CONTAINS
+
+
+
+      SUBROUTINE read_netcdf_hotfile(the_meshdata, the_hotdata,        &
+     &    global_fort14_dir)
+
+      use adcirpolate, only: allocate_hotdata, hotdata,  meshdata
+
+      implicit none
+
+      type(meshdata), intent(in)   :: the_meshdata
+      type(hotdata),  intent(out)  :: the_hotdata
+      character(len=*), intent(in) :: global_fort14_dir
+
+      integer :: ncdim_nele
+      integer :: ncdim_node
+      integer :: ncid
+      integer :: ncvar_iestp
+      integer :: ncvar_igep
+      integer :: ncvar_igpp
+      integer :: ncvar_igvp
+      integer :: ncvar_igwp
+      integer :: ncvar_imhs
+      integer :: ncvar_ipstp
+      integer :: ncvar_iths
+      integer :: ncvar_ivstp
+      integer :: ncvar_iwstp
+      integer :: ncvar_nodecode
+      integer :: ncvar_noff
+      integer :: ncvar_nscoue
+      integer :: ncvar_nscouge
+      integer :: ncvar_nscougv
+      integer :: ncvar_nscougw
+      integer :: ncvar_nscoum
+      integer :: ncvar_nscouv
+      integer :: ncvar_time
+      integer :: ncvar_uvel
+      integer :: ncvar_vvel
+      integer :: ncvar_zeta1
+      integer :: ncvar_zeta2
+      integer :: ncvar_zetad
+
+      integer,allocatable :: getIntEl(:)
+      integer,allocatable :: getIntNd(:)
+      integer :: ie
+      integer :: iret
+      integer :: iv
+      integer :: numGlobalEl
+      integer :: numGlobalNd
+
+      real(8),allocatable :: getRealNd(:)
+      real(8) :: getArray(1)
+
+      !
+      ! ALLOCATE ARRAYS
+      !
+
+      call allocate_hotdata(the_hotdata, the_meshdata)
+
+      ! INITIALIZE
+
+      ! Open the file.
+      iret = nf90_open( trim(global_fort14_dir)//'/fort.67.nc',        &
+                        nf90_nowrite, ncid )
+
+      !
+      ! READ DIMENSIONS
+      !
+
+      ! node
+
+      iret = nf90_inq_dimid( ncid, "node", ncdim_node )
+      iret = nf90_inquire_dimension( ncid, ncdim_node, len=numGlobalNd ) 
+      allocate(getIntNd(1:numGlobalNd))
+      allocate(getRealNd(1:numGlobalNd))
+
+      ! nele
+
+      iret = nf90_inq_dimid( ncid, "nele", ncdim_nele )
+      iret = nf90_inquire_dimension( ncid, ncdim_nele, len=numGlobalEl ) 
+      allocate(getIntEl(1:numGlobalEl))
+
+      !
+      ! READ VARIABLES
+      !
+
+      ! time
+
+      iret = nf90_inq_varid( ncid, "time", ncvar_time )
+      iret = nf90_get_var( ncid, ncvar_time, getArray )
+      the_hotdata%TimeLoc = getArray(1)
+
+      ! zeta1
+
+      iret = nf90_inq_varid( ncid, "zeta1", ncvar_zeta1 )
+      iret = nf90_get_var( ncid, ncvar_zeta1, getRealNd,               &
+     &                     start=(/1,1/),count=(/numGlobalNd,1/) )
+      do iv=1,the_meshdata%NumNd
+        the_hotdata%ETA1(iv) = getRealNd(the_meshdata%NdIDs(iv))
+      enddo
+
+      ! zeta2
+
+      iret = nf90_inq_varid( ncid, "zeta2", ncvar_zeta2 )
+      iret = nf90_get_var( ncid, ncvar_zeta2, getRealNd,               &
+     &                     start=(/1,1/),count=(/numGlobalNd,1/) )
+      do iv=1,the_meshdata%NumNd
+        the_hotdata%ETA2(iv) = getRealNd(the_meshdata%NdIDs(iv))
+      enddo
+
+      ! zeta2
+
+      iret = nf90_inq_varid( ncid, "zetad", ncvar_zetad )
+      iret = nf90_get_var( ncid, ncvar_zetad, getRealNd,               &
+     &                     start=(/1,1/),count=(/numGlobalNd,1/) )
+      do iv=1,the_meshdata%NumNd
+        the_hotdata%ETADisc(iv) = getRealNd(the_meshdata%NdIDs(iv))
+      enddo
+
+      ! u-vel
+
+      iret = nf90_inq_varid( ncid, "u-vel", ncvar_uvel )
+      iret = nf90_get_var( ncid, ncvar_uvel, getRealNd,                &
+     &                     start=(/1,1/),count=(/numGlobalNd,1/) )
+      do iv=1,the_meshdata%NumNd
+        the_hotdata%UU2(iv) = getRealNd(the_meshdata%NdIDs(iv))
+      enddo
+
+      ! v-vel
+
+      iret = nf90_inq_varid( ncid, "v-vel", ncvar_vvel )
+      iret = nf90_get_var( ncid, ncvar_vvel, getRealNd,                &
+     &                     start=(/1,1/),count=(/numGlobalNd,1/) )
+      do iv=1,the_meshdata%NumNd
+        the_hotdata%VV2(iv) = getRealNd(the_meshdata%NdIDs(iv))
+      enddo
+
+      ! nodecode
+
+      iret = nf90_inq_varid( ncid, "nodecode", ncvar_nodecode )
+      iret = nf90_get_var( ncid, ncvar_nodecode, getIntNd,             &
+     &                     start=(/1,1/),count=(/numGlobalNd,1/) )
+      do iv=1,the_meshdata%NumNd
+        the_hotdata%NNODECODE(iv) = getIntNd(the_meshdata%NdIDs(iv))
+        the_hotdata%realNODECODE(iv) = dble(the_hotdata%NNODECODE(iv))
+      enddo
+
+      ! noff
+
+      iret = nf90_inq_varid( ncid, "noff", ncvar_noff )
+      iret = nf90_get_var( ncid, ncvar_noff, getIntEl,                 &
+     &                     start=(/1,1/),count=(/numGlobalEl,1/) )
+      do ie=1,the_meshdata%NumEl
+        the_hotdata%NOFF(ie) = getIntEl(the_meshdata%ElIDs(ie))
+      enddo
+
+      ! imhs
+
+      iret = nf90_inq_varid( ncid, "imhs", ncvar_imhs )
+      iret = nf90_get_var( ncid, ncvar_imhs, the_hotdata%IMHS )
+
+      ! iths
+
+      iret = nf90_inq_varid( ncid, "iths", ncvar_iths )
+      iret = nf90_get_var( ncid, ncvar_iths, the_hotdata%ITHS )
+
+      ! iestp
+
+      iret = nf90_inq_varid( ncid, "iestp", ncvar_iestp )
+      iret = nf90_get_var( ncid, ncvar_iestp, the_hotdata%IESTP )
+
+      ! nscoue
+
+      iret = nf90_inq_varid( ncid, "nscoue", ncvar_nscoue )
+      iret = nf90_get_var( ncid, ncvar_nscoue, the_hotdata%NSCOUE )
+
+      ! ivstp
+
+      iret = nf90_inq_varid( ncid, "ivstp", ncvar_ivstp )
+      iret = nf90_get_var( ncid, ncvar_ivstp, the_hotdata%IVSTP )
+
+      ! nscouv
+
+      iret = nf90_inq_varid( ncid, "nscouv", ncvar_nscouv )
+      iret = nf90_get_var( ncid, ncvar_nscouv, the_hotdata%NSCOUV )
+
+      ! ipstp
+
+      iret = nf90_inq_varid( ncid, "ipstp", ncvar_ipstp )
+      iret = nf90_get_var( ncid, ncvar_ipstp, the_hotdata%IPSTP )
+
+      ! iwstp
+
+      iret = nf90_inq_varid( ncid, "iwstp", ncvar_iwstp )
+      iret = nf90_get_var( ncid, ncvar_iwstp, the_hotdata%IWSTP )
+
+      ! nscoum
+
+      iret = nf90_inq_varid( ncid, "nscoum", ncvar_nscoum )
+      iret = nf90_get_var( ncid, ncvar_nscoum, the_hotdata%NSCOUM )
+
+      ! igep
+
+      iret = nf90_inq_varid( ncid, "igep", ncvar_igep )
+      iret = nf90_get_var( ncid, ncvar_igep, the_hotdata%IGEP )
+
+      ! nscouge
+
+      iret = nf90_inq_varid( ncid, "nscouge", ncvar_nscouge )
+      iret = nf90_get_var( ncid, ncvar_nscouge, the_hotdata%NSCOUGE )
+
+      ! igvp
+
+      iret = nf90_inq_varid( ncid, "igvp", ncvar_igvp )
+      iret = nf90_get_var( ncid, ncvar_igvp, the_hotdata%IGVP )
+
+      ! nscougv
+
+      iret = nf90_inq_varid( ncid, "nscougv", ncvar_nscougv )
+      iret = nf90_get_var( ncid, ncvar_nscougv, the_hotdata%NSCOUGV )
+
+      ! igpp
+
+      iret = nf90_inq_varid( ncid, "igpp", ncvar_igpp )
+      iret = nf90_get_var( ncid, ncvar_igpp, the_hotdata%IGPP )
+
+      ! igwp
+
+      iret = nf90_inq_varid( ncid, "igwp", ncvar_igwp )
+      iret = nf90_get_var( ncid, ncvar_igwp, the_hotdata%IGWP )
+
+      ! nscougw
+
+      iret = nf90_inq_varid( ncid, "nscougw", ncvar_nscougw )
+      iret = nf90_get_var( ncid, ncvar_nscougw, the_hotdata%NSCOUGW )
+
+      !
+      ! FINALIZE
+      !
+
+      !
+      ! Close the file.
+      !
+      iret = nf90_close( ncid )
+
+      ENDSUBROUTINE
+
+
 
       SUBROUTINE write_netcdf_hotfile(the_meshdata, the_hotdata)
 

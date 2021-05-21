@@ -555,10 +555,9 @@ contains
    !!fort14_filename. Unlike extract_parallel_data_from_mesh(), this function does not
    !! create a parallel meshdata, so it can be called by only one PE and the created meshdata
    !! object can later be used to create an ESMF_Mesh object.
-   subroutine extract_global_data_from_fort14(fort14_filename, the_data)
+   subroutine extract_global_data_from_fort14(the_data)
       implicit none
       type(meshdata), intent(inout)         :: the_data
-      character(len=*), intent(in)          :: fort14_filename
       integer(ESMF_KIND_I4)                 :: i1, i_num, localPet, petCount, rc
       integer(ESMF_KIND_I4), parameter      :: dim1 = 2, spacedim = 2, NumND_per_El = 3
       logical                               :: iOpen, iExist
@@ -566,11 +565,11 @@ contains
       call ESMF_VMGet(vm=the_data%vm, localPet=localPet, petCount=petCount, rc=rc)
       if (localPet == 0) then
          call show_message("looking for global fort.14 in the directory: "//the_data%dir_name)
-         inquire (FILE=fort14_filename, opened=iOpen, exist=iExist, number=i_num)
+         inquire (FILE=TRIM(the_data%dir_name)//"/fort.14", opened=iOpen, exist=iExist, number=i_num)
          if (.not. iExist) call throw_fatal_error("fort.14 file is not found."// &
-            "I tried to access file in: "//fort14_filename)
+            "I tried to access file in: "//TRIM(the_data%dir_name)//"/fort.14")
       endif
-      open (unit=14, file=fort14_filename, form='FORMATTED', status='OLD', action='READ')
+      open (unit=14, file=TRIM(the_data%dir_name)//"/fort.14", form='FORMATTED', status='OLD', action='READ')
       read (unit=14, fmt=*)
       read (unit=14, fmt=*) the_data%NumEl, the_data%NumNd
       allocate (the_data%NdIDs(the_data%NumNd))
@@ -601,7 +600,7 @@ contains
    !! gather their elements into an array (\c out_fieldarray) in \c PE=root. For this
    !! process we use an ESMF_VM which is given to this function as an input. Since, MPI_Gather
    !! is collective this function should also be called collectively.
-   subroutine gather_int_datafield_on_root(vm1, fieldarray, root, out_fieldarray, dir_name)
+   subroutine gather_int_datafield_on_root(vm1, fieldarray, root, out_fieldarray, dir_name, partNd)
       implicit none
 
       type(ESMF_VM), intent(in)                         :: vm1
@@ -609,6 +608,8 @@ contains
       integer(ESMF_KIND_I4), allocatable, intent(inout) :: out_fieldarray(:)
       integer(ESMF_KIND_I4), intent(in)                 :: root
       character(len=*), intent(in)                      :: dir_name
+!Casey 210524
+      integer(ESMF_KIND_I4), allocatable, intent(in), optional :: partNd(:)
       integer(ESMF_KIND_I4)                             :: send_count, localPet, petCount, num_total_nodes, &
                                                            i1, j1, k1, i_num, j_num1, rc, trash2, trash3
       integer(ESMF_KIND_I4), allocatable                :: recv_counts(:), gather_displs(:)
@@ -630,17 +631,26 @@ contains
          allocate (gather_displs(petCount))
          gather_displs(1) = 0
          recv_counts = 0
+!Casey 210524
+#ifdef OLD
          open (unit=100, file=dir_name//"/partmesh.txt", form='FORMATTED', &
                status='OLD', action='READ')
+#endif
          do i1 = 1, num_total_nodes, 1
+#ifdef OLD
             read (100, *) i_num
+#else
+            i_num = partNd(i1) + 1
+#endif
             recv_counts(i_num) = recv_counts(i_num) + 1
          end do
          do i1 = 2, petCount, 1
             gather_displs(i1) = gather_displs(i1 - 1) + recv_counts(i1 - 1)
          end do
          allocate (temp_fieldarray(num_total_nodes))
+#ifdef OLD
          close (100)
+#endif
       end if
       !
       call MPI_Gatherv(fieldarray, send_count, MPI_INTEGER, &
@@ -652,6 +662,8 @@ contains
                                            new_line('A'))
       if (localPet == 0) then
          do i1 = 1, petCount, 1
+!Casey 210524
+#ifdef OLD
             write (PE_ID, "(A,I4.4)") 'PE', i1 - 1
             open (unit=18, file=dir_name//PE_ID//"/fort.18", form='FORMATTED', &
                   status='OLD', action='READ')
@@ -669,6 +681,15 @@ contains
                   out_fieldarray(j_num1) = temp_fieldarray(gather_displs(i1) + k1)
                end if
             end do
+#else
+            k1 = 0
+            do j1 = 1, num_total_nodes
+              if( partNd(j1).eq.(i1-1) )then
+                k1 = k1 + 1
+                out_fieldarray(j1) = temp_fieldarray(gather_displs(i1) + k1)
+              endif
+            enddo
+#endif
          end do
       end if
    end subroutine
@@ -677,7 +698,7 @@ contains
    !! gather their elements into an array (\c out_fieldarray) in \c PE=root. For this
    !! process we use an ESMF_VM which is given to this function as an input. Since, MPI_Gather
    !! is collective this function should also be called collectively.
-   subroutine gather_datafield_on_root(vm1, fieldarray, root, out_fieldarray, dir_name)
+   subroutine gather_datafield_on_root(vm1, fieldarray, root, out_fieldarray, dir_name, partNd)
       implicit none
 
       type(ESMF_VM), intent(in)                       :: vm1
@@ -685,6 +706,8 @@ contains
       real(ESMF_KIND_R8), allocatable, intent(inout)  :: out_fieldarray(:)
       integer(ESMF_KIND_I4), intent(in)               :: root
       character(len=*), intent(in)                    :: dir_name
+!Casey 210524
+      integer(ESMF_KIND_I4),allocatable,intent(in),optional :: partNd(:)
       integer(ESMF_KIND_I4)                           :: send_count, localPet, petCount, num_total_nodes, &
                                                          i1, j1, k1, i_num, j_num1, rc, trash2, trash3
       integer(ESMF_KIND_I4), allocatable              :: recv_counts(:), gather_displs(:)
@@ -706,17 +729,26 @@ contains
          allocate (gather_displs(petCount))
          gather_displs(1) = 0
          recv_counts = 0
+!Casey 210524
+#ifdef OLD
          open (unit=100, file=dir_name//"/partmesh.txt", form='FORMATTED', &
                status='OLD', action='READ')
+#endif
          do i1 = 1, num_total_nodes, 1
+#ifdef OLD
             read (100, *) i_num
+#else
+            i_num = partNd(i1) + 1
+#endif
             recv_counts(i_num) = recv_counts(i_num) + 1
          end do
          do i1 = 2, petCount, 1
             gather_displs(i1) = gather_displs(i1 - 1) + recv_counts(i1 - 1)
          end do
          allocate (temp_fieldarray(num_total_nodes))
+#ifdef OLD
          close (100)
+#endif
       end if
 
       call MPI_Gatherv(fieldarray, send_count, MPI_DOUBLE_PRECISION, &
@@ -727,6 +759,8 @@ contains
                                            new_line('A'))
       if (localPet == 0) then
          do i1 = 1, petCount, 1
+!Casey 210524
+#ifdef OLD
             write (PE_ID, "(A,I4.4)") 'PE', i1 - 1
             open (unit=18, file=dir_name//PE_ID//"/fort.18", form='FORMATTED', &
                   status='OLD', action='READ')
@@ -744,6 +778,15 @@ contains
                   out_fieldarray(j_num1) = temp_fieldarray(gather_displs(i1) + k1)
                end if
             end do
+#else
+            k1 = 0
+            do j1 = 1, num_total_nodes
+              if( partNd(j1).eq.(i1-1) )then
+                k1 = k1 + 1
+                out_fieldarray(j1) = temp_fieldarray(gather_displs(i1) + k1)
+              endif
+            enddo
+#endif
          end do
       end if
    end subroutine
@@ -761,6 +804,12 @@ contains
       type(meshdata), intent(in)          :: localized_meshdata
       type(meshdata), intent(in)          :: global_meshdata
       integer(ESMF_KIND_I4)               :: root, localPet, petCount, rc
+!Casey 210524
+      integer(ESMF_KIND_I4),allocatable   :: partNd(:)
+      integer(ESMF_KIND_I4) :: gvv
+      integer(ESMF_KIND_I4) :: ie
+      integer(ESMF_KIND_I4) :: ivv
+      integer(ESMF_KIND_I4) :: owner
 
       call ESMF_VMGet(vm=localized_meshdata%vm, localPet=localPet, petCount=petCount, rc=rc)
       allocate (localfieldarray_ptr(localized_meshdata%NumOwnedNd))
@@ -768,48 +817,75 @@ contains
       if (localPet == root) then
          allocate (globalfieldarray_ptr(global_meshdata%NumNd))
          allocate (int_globalfieldarray_ptr(global_meshdata%NumNd))
-      end if
+!Casey 210524
+         allocate(partNd(global_meshdata%NumNd))
+         partNd = petCount - 1
+         do ie=1,global_meshdata%NumEl
+           owner = floor( real(ie-1)                                   &
+     &       / real(floor(real(global_meshdata%NumEl)/real(petCount))) )
+           do ivv=1,3
+             gvv = global_meshdata%ElConnect((ie-1)*3+ivv)
+             if( partNd(gvv).gt.owner )then
+               partNd(gvv) = owner
+             endif
+           enddo
+         enddo
+      endif
 
       if (localPet == root) call show_message("Gathering dst eta1 on root:")
       localfieldarray_ptr = localized_hotdata%ETA1
       call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
-                                    root, globalfieldarray_ptr, localized_meshdata%dir_name)
+                                    root, globalfieldarray_ptr, localized_meshdata%dir_name, &
+!Casey 210524
+     &                              partNd)
       if (localPet == root) global_hotdata%ETA1 = globalfieldarray_ptr
       !
       if (localPet == root) call show_message("Gathering dst eta2 on root:")
       localfieldarray_ptr = localized_hotdata%ETA2
       call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
-                                    root, globalfieldarray_ptr, localized_meshdata%dir_name)
+                                    root, globalfieldarray_ptr, localized_meshdata%dir_name, &
+!Casey 210524
+     &                              partNd)
       if (localPet == root) global_hotdata%ETA2 = globalfieldarray_ptr
       !
       if (localPet == root) call show_message("Gathering dst etaDisc on root:")
       localfieldarray_ptr = localized_hotdata%ETADisc
       call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
-                                    root, globalfieldarray_ptr, localized_meshdata%dir_name)
+                                    root, globalfieldarray_ptr, localized_meshdata%dir_name, &
+!Casey 210524
+     &                              partNd)
       if (localPet == root) global_hotdata%ETADisc = globalfieldarray_ptr
       !
       if (localPet == root) call show_message("Gathering dst UU2 on root:")
       localfieldarray_ptr = localized_hotdata%UU2
       call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
-                                    root, globalfieldarray_ptr, localized_meshdata%dir_name)
+                                    root, globalfieldarray_ptr, localized_meshdata%dir_name, &
+!Casey 210524
+     &                              partNd)
       if (localPet == root) global_hotdata%UU2 = globalfieldarray_ptr
       !
       if (localPet == root) call show_message("Gathering dst VV2 on root:")
       localfieldarray_ptr = localized_hotdata%VV2
       call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
-                                    root, globalfieldarray_ptr, localized_meshdata%dir_name)
+                                    root, globalfieldarray_ptr, localized_meshdata%dir_name, &
+!Casey 210524
+     &                              partNd)
       if (localPet == root) global_hotdata%VV2 = globalfieldarray_ptr
       !
       if (localPet == root) call show_message("Gathering dst CH1 on root:")
       localfieldarray_ptr = localized_hotdata%CH1
       call gather_datafield_on_root(localized_meshdata%vm, localfieldarray_ptr, &
-                                    root, globalfieldarray_ptr, localized_meshdata%dir_name)
+                                    root, globalfieldarray_ptr, localized_meshdata%dir_name, &
+!Casey 210524
+     &                              partNd)
       if (localPet == root) global_hotdata%CH1 = globalfieldarray_ptr
       !
       if (localPet == root) call show_message("Gathering dst NODECODE on root:")
       int_localfieldarray_ptr = localized_hotdata%NNODECODE
       call gather_int_datafield_on_root(localized_meshdata%vm, int_localfieldarray_ptr, &
-                                        root, int_globalfieldarray_ptr, localized_meshdata%dir_name)
+                                        root, int_globalfieldarray_ptr, localized_meshdata%dir_name, &
+!Casey 210524
+     &                                  partNd)
       if (localPet == root) global_hotdata%NNODECODE = int_globalfieldarray_ptr
    end subroutine
 
@@ -1313,13 +1389,13 @@ contains
    subroutine destroy_meshdata(the_data)
       implicit none
       type(meshdata), intent(inout) :: the_data
-      deallocate (the_data%NdIDs)
-      deallocate (the_data%ElIDs)
-      deallocate (the_data%NdCoords)
-      deallocate (the_data%bathymetry)
-      deallocate (the_data%ElConnect)
-      deallocate (the_data%NdOwners)
-      deallocate (the_data%ElTypes)
+      if(allocated(the_data%NdIDs)) deallocate (the_data%NdIDs)
+      if(allocated(the_data%ElIDs)) deallocate (the_data%ElIDs)
+      if(allocated(the_data%NdCoords)) deallocate (the_data%NdCoords)
+      if(allocated(the_data%bathymetry)) deallocate (the_data%bathymetry)
+      if(allocated(the_data%ElConnect)) deallocate (the_data%ElConnect)
+      if(allocated(the_data%NdOwners)) deallocate (the_data%NdOwners)
+      if(allocated(the_data%ElTypes)) deallocate (the_data%ElTypes)
    end subroutine
 
    subroutine destroy_hotdata(the_data)

@@ -49,6 +49,8 @@ program main
    use wetdry
 !Casey 210305
    use netcdfio
+!Casey 210514
+   use splitter
 
    implicit none
    real(ESMF_KIND_R8), pointer   :: global_fieldptr(:), aux_global_fieldptr(:)
@@ -63,7 +65,7 @@ program main
    real(ESMF_KIND_R8), parameter :: h0 = 0.05
 
 !Casey 210308
-   logical                       :: write_netcdf = .FALSE.
+   logical                       :: write_netcdf = .TRUE.
 
    !
    ! Any program using ESMF library should start with ESMF_Initialize(...).
@@ -85,14 +87,30 @@ program main
    ! and using those meshdata objects, we create the ESMF_Mesh objects, and
    ! we write the mesh into parallel vtu outputs.
    !
+!Casey 210514
+#ifdef OLD
    call extract_parallel_data_from_mesh(vm1, src_fort14_dir, src_data)
+#else
+   global_src_data%vm = vm1
+   global_src_data%dir_name = src_fort14_dir
+   call extract_global_data_from_fort14(global_src_data)
+   call decompose_global_mesh(vm1, global_src_data, src_data)
+#endif
 #ifdef DEBUG_MANIAC
    call write_meshdata_to_vtu(src_data, PE_ID//"_src_mesh.vtu", .true.)
 #endif
    if (localPet == 0) call show_message("Creating parallel ESMF mesh from ADCIRC source mesh"//new_line("A"))
    call create_parallel_esmf_mesh_from_meshdata(src_data, src_mesh)
 
+!Casey 210521
+#ifdef OLD
    call extract_parallel_data_from_mesh(vm1, dst_fort14_dir, dst_data)
+#else
+   global_dst_data%vm = vm1
+   global_dst_data%dir_name = dst_fort14_dir
+   call extract_global_data_from_fort14(global_dst_data)
+   call decompose_global_mesh(vm1, global_dst_data, dst_data)
+#endif
 #ifdef DEBUG_MANIAC
    call write_meshdata_to_vtu(dst_data, PE_ID//"_dst_mesh.vtu", .true.)
 #endif
@@ -104,8 +122,13 @@ program main
    ! destination mesh and fields.
    !
    if (localPet == 0) call show_message("Reading parallel hotdata from source directory."//new_line("A"))
+!Casey 210521
+#ifdef OLD
    call extract_hotdata_from_parallel_binary_fort_67(src_data, src_hotdata, &
-                                                     src_fort14_dir, .true.)
+                                                     src_fort14_dir, .false.)
+#else
+   call read_netcdf_hotfile(src_data, src_hotdata, src_fort14_dir)
+#endif
    call allocate_hotdata(dst_hotdata, dst_data)
 
    !
@@ -233,9 +256,14 @@ program main
    dst_hotdata%NNODECODE = nint(dst_hotdata%realNODECODE)
 
    if (localPet == 0) then
+!Casey 210514
+#ifdef DEBUG_MODE
       call extract_global_data_from_fort14(src_data%dir_name//"/fort.14", global_src_data)
-      call extract_global_data_from_fort14(dst_data%dir_name//"/fort.14", global_dst_data)
       call allocate_hotdata(global_src_hotdata, global_src_data)
+#endif
+#ifdef OLD
+      call extract_global_data_from_fort14(global_dst_data)
+#endif
       call allocate_hotdata(global_dst_hotdata, global_dst_data)
    end if
 
@@ -328,7 +356,7 @@ program main
 
       call show_message("Writing the global fort.67 in the destination mesh.")
 !Casey 210308
-      if(write_netcdf)then
+      if(.NOT.write_netcdf)then
 #ifdef DEBUG_MODE
         call write_serial_hotfile_to_fort_67(global_dst_data, global_dst_hotdata, &
                                            dst_fort14_dir, .true.)
@@ -336,9 +364,10 @@ program main
         call write_serial_hotfile_to_fort_67(global_dst_data, global_dst_hotdata, &
                                            dst_fort14_dir, .false.)
 #endif
-      endif
 !Casey 210305
-      call write_netcdf_hotfile(global_dst_data, global_dst_hotdata)
+      else
+        call write_netcdf_hotfile(global_dst_data, global_dst_hotdata)
+      endif
 
    end if
 
@@ -346,8 +375,8 @@ program main
    ! Finally, we have to release the memory.
    !
    if (localPet == 0) then
-      call destroy_meshdata(global_dst_data)
       call destroy_meshdata(global_src_data)
+      call destroy_meshdata(global_dst_data)
    end if
    call destroy_regrid_data(the_regrid_data)
    call ESMF_MeshDestroy(dst_mesh)
