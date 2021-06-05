@@ -196,20 +196,20 @@ program main
    ! only the interpolation matrices will be constructed. We construct one matrix for
    ! nodal points with mask=1, and one for those points with mask=0.
    !
-   if (localPet == 0) call show_message("Creating ESMF regriding operators:")
+   if (localPet == 0) call show_message("Creating ESMF regridding operators:")
    call ESMF_FieldRegridStore(srcField=the_regrid_data%src_datafield, &
                               dstField=the_regrid_data%dst_mask_field, &
                               unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
                               routeHandle=the_regrid_data%mapped_route_handle, &
                               regridmethod=ESMF_REGRIDMETHOD_BILINEAR, rc=rc)
-   if (localPet == 0 .AND. rc == 0) call show_message("mapped regriding operator is created.")
+   if (localPet == 0 .AND. rc == 0) call show_message("mapped regridding operator is created.")
    call check_error(__LINE__, __FILE__, rc)
    call ESMF_FieldRegridStore(srcField=the_regrid_data%src_datafield, &
                               dstField=the_regrid_data%dst_unmapped_field, &
                               unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
                               routeHandle=the_regrid_data%unmapped_route_handle, &
                               regridmethod=ESMF_REGRIDMETHOD_NEAREST_STOD, rc=rc)
-   if (localPet == 0 .AND. rc == 0) call show_message("unmapped regriding operator is created."//new_line("A"))
+   if (localPet == 0 .AND. rc == 0) call show_message("unmapped regridding operator is created."//new_line("A"))
    call check_error(__LINE__, __FILE__, rc)
 
    !
@@ -226,31 +226,31 @@ program main
    ! Now we map the nodal values of ETA1, ETA2, ETADisc, UU2, VV2, CH1
    ! from the source mesh to the destination mesh.
    !
-   if (localPet == 0) call show_message("Regriding eta1:")
+   if (localPet == 0) call show_message("regridding eta1:")
    call regrid_datafield_of_present_nodes(the_regrid_data, src_data, dst_data, src_hotdata%ETA1)
    dst_hotdata%ETA1 = the_regrid_data%mapped_fieldptr
 
-   if (localPet == 0) call show_message("Regriding eta2:")
+   if (localPet == 0) call show_message("regridding eta2:")
    call regrid_datafield_of_present_nodes(the_regrid_data, src_data, dst_data, src_hotdata%ETA2)
    dst_hotdata%ETA2 = the_regrid_data%mapped_fieldptr
 
-   if (localPet == 0) call show_message("Regriding etaDisc:")
+   if (localPet == 0) call show_message("regridding etaDisc:")
    call regrid_datafield_of_present_nodes(the_regrid_data, src_data, dst_data, src_hotdata%ETADisc)
    dst_hotdata%ETADisc = the_regrid_data%mapped_fieldptr
 
-   if (localPet == 0) call show_message("Regriding UU2:")
+   if (localPet == 0) call show_message("regridding UU2:")
    call regrid_datafield_of_present_nodes(the_regrid_data, src_data, dst_data, src_hotdata%UU2)
    dst_hotdata%UU2 = the_regrid_data%mapped_fieldptr
 
-   if (localPet == 0) call show_message("Regriding VV2:")
+   if (localPet == 0) call show_message("regridding VV2:")
    call regrid_datafield_of_present_nodes(the_regrid_data, src_data, dst_data, src_hotdata%VV2)
    dst_hotdata%VV2 = the_regrid_data%mapped_fieldptr
 
-   if (localPet == 0) call show_message("Regriding CH1:")
+   if (localPet == 0) call show_message("regridding CH1:")
    call regrid_datafield_of_present_nodes(the_regrid_data, src_data, dst_data, src_hotdata%CH1)
    dst_hotdata%CH1 = the_regrid_data%mapped_fieldptr
 
-   if (localPet == 0) call show_message("Regriding NODECODE:")
+   if (localPet == 0) call show_message("regridding NODECODE:")
    call regrid_datafield_of_present_nodes(the_regrid_data, src_data, dst_data, src_hotdata%realNODECODE)
    dst_hotdata%realNODECODE = the_regrid_data%mapped_fieldptr
    dst_hotdata%NNODECODE = nint(dst_hotdata%realNODECODE)
