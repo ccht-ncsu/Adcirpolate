@@ -81,14 +81,14 @@
       ! node
 
       iret = nf90_inq_dimid( ncid, "node", ncdim_node )
-      iret = nf90_inquire_dimension( ncid, ncdim_node, len=numGlobalNd ) 
+      iret = nf90_inquire_dimension( ncid, ncdim_node, len=numGlobalNd )
       allocate(getIntNd(1:numGlobalNd))
       allocate(getRealNd(1:numGlobalNd))
 
       ! nele
 
       iret = nf90_inq_dimid( ncid, "nele", ncdim_nele )
-      iret = nf90_inquire_dimension( ncid, ncdim_nele, len=numGlobalEl ) 
+      iret = nf90_inquire_dimension( ncid, ncdim_nele, len=numGlobalEl )
       allocate(getIntEl(1:numGlobalEl))
 
       !
@@ -683,7 +683,7 @@
                                //" of the most recent entry in the"    &
                                //" atmospheric pressure time series at"&
                                //" all nodes in the model grid output" &
-                               //" file" 
+                               //" file"
       write(ncatts(2,1),'(a)') "standard_name"
       write(ncatts(2,2),'(a)') "record_number_of_last_entry_of_atm"    &
                                //"_press_at_model_nodes"
@@ -700,7 +700,7 @@
                                //" of the most recent entry in the"    &
                                //" wind stress or velocity time series"&
                                //" at all nodes in the model grid"     &
-                               //" output file" 
+                               //" output file"
       write(ncatts(2,1),'(a)') "standard_name"
       write(ncatts(2,2),'(a)') "record_number_of_last_entry_of_wind"   &
                                //"_vel_at_model_nodes"
@@ -779,67 +779,67 @@
       !
       ! imhs -- read in netcdfio/readNetCDFHotstart
       !
-      iret = nf90_put_var( ncid, ncvar_imhs, the_hotdata%IMHS ) 
+      iret = nf90_put_var( ncid, ncvar_imhs, the_hotdata%IMHS )
       !
       ! iths -- read in netcdfio/readNetCDFHotstart
       !
-      iret = nf90_put_var( ncid, ncvar_iths, the_hotdata%ITHS ) 
+      iret = nf90_put_var( ncid, ncvar_iths, the_hotdata%ITHS )
       !
       ! iestp -- read in netcdfio/readNetCDFHotstart
       !
-      iret = nf90_put_var( ncid, ncvar_iestp, the_hotdata%IESTP ) 
+      iret = nf90_put_var( ncid, ncvar_iestp, the_hotdata%IESTP )
       !
       ! nscoue -- read in netcdfio/readNetCDFHotstart
       !
-      iret = nf90_put_var( ncid, ncvar_nscoue, the_hotdata%NSCOUE ) 
+      iret = nf90_put_var( ncid, ncvar_nscoue, the_hotdata%NSCOUE )
       !
       ! ivstp -- read in netcdfio/readNetCDFHotstart
       !
-      iret = nf90_put_var( ncid, ncvar_ivstp, the_hotdata%IVSTP ) 
+      iret = nf90_put_var( ncid, ncvar_ivstp, the_hotdata%IVSTP )
       !
       ! nscouv -- read in netcdfio/readNetCDFHotstart
       !
-      iret = nf90_put_var( ncid, ncvar_nscouv, the_hotdata%NSCOUV ) 
+      iret = nf90_put_var( ncid, ncvar_nscouv, the_hotdata%NSCOUV )
       !
       ! ipstp -- read in netcdfio/readNetCDFHotstart
       !
-      iret = nf90_put_var( ncid, ncvar_ipstp, the_hotdata%IPSTP ) 
+      iret = nf90_put_var( ncid, ncvar_ipstp, the_hotdata%IPSTP )
       !
       ! iwstp -- read in netcdfio/readNetCDFHotstart
       !
-      iret = nf90_put_var( ncid, ncvar_iwstp, the_hotdata%IWSTP ) 
+      iret = nf90_put_var( ncid, ncvar_iwstp, the_hotdata%IWSTP )
       !
       ! nscoum -- read in netcdfio/readNetCDFHotstart
       !
-      iret = nf90_put_var( ncid, ncvar_nscoum, the_hotdata%NSCOUM ) 
+      iret = nf90_put_var( ncid, ncvar_nscoum, the_hotdata%NSCOUM )
       !
       ! igep -- read in netcdfio/readNetCDFHotstart
       !
-      iret = nf90_put_var( ncid, ncvar_igep, the_hotdata%IGEP ) 
+      iret = nf90_put_var( ncid, ncvar_igep, the_hotdata%IGEP )
       !
       ! nscouge -- read in netcdfio/readNetCDFHotstart
       !
-      iret = nf90_put_var( ncid, ncvar_nscouge, the_hotdata%NSCOUGE ) 
+      iret = nf90_put_var( ncid, ncvar_nscouge, the_hotdata%NSCOUGE )
       !
       ! igvp -- read in netcdfio/readNetCDFHotstart
       !
-      iret = nf90_put_var( ncid, ncvar_igvp, the_hotdata%IGVP ) 
+      iret = nf90_put_var( ncid, ncvar_igvp, the_hotdata%IGVP )
       !
       ! nscougv -- read in netcdfio/readNetCDFHotstart
       !
-      iret = nf90_put_var( ncid, ncvar_nscougv, the_hotdata%NSCOUGV ) 
+      iret = nf90_put_var( ncid, ncvar_nscougv, the_hotdata%NSCOUGV )
       !
       ! igpp -- read in netcdfio/readNetCDFHotstart
       !
-      iret = nf90_put_var( ncid, ncvar_igpp, the_hotdata%IGPP ) 
+      iret = nf90_put_var( ncid, ncvar_igpp, the_hotdata%IGPP )
       !
       ! igwp -- read in netcdfio/readNetCDFHotstart
       !
-      iret = nf90_put_var( ncid, ncvar_igwp, the_hotdata%IGWP ) 
+      iret = nf90_put_var( ncid, ncvar_igwp, the_hotdata%IGWP )
       !
       ! nscougw -- read in netcdfio/readNetCDFHotstart
       !
-      iret = nf90_put_var( ncid, ncvar_nscougw, the_hotdata%NSCOUGW ) 
+      iret = nf90_put_var( ncid, ncvar_nscougw, the_hotdata%NSCOUGW )
 
       !
       ! FINALIZE
@@ -901,7 +901,7 @@
         if(len_trim(ncatts(ia,1)).gt.0)then
           if( (index(ncatts(ia,1),'start_index').gt.0) .or.            &
               (index(ncatts(ia,1),'topology_dimension').gt.0) )then
-            read(ncatts(ia,2),'(i)') iatt
+            read(ncatts(ia,2),*) iatt
             iret = nf90_put_att( ncid, ncvar,                          &
                         trim(adjustl(ncatts(ia,1))),                   &
                         iatt )

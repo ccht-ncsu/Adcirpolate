@@ -1,20 +1,12 @@
 cmake_minimum_required (VERSION 3.0)
-project (adcirpolate Fortran)
+project (adcirpolate LANGUAGES Fortran)
+enable_language(Fortran)
+
+option(USE_NETCDF "Build with NetCDF" ON)
 
 set (CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/CMakeModules")
 
 find_package (ESMF)
-
-# if (DEFINED WITH_HDF5 AND NOT DEFINED ENV{HDF5_DIR})
-#   message (FATAL_ERROR "\n${Esc}[1;31m!! Error: You have enabled HDF5 linking, \
-#                    but you have not defined HDF5_DIR. Try something like: ${Esc}[m\
-#                    export HDF_DIR=/path/to/hdf5 && cmake ${CMAKE_SOURCE_DIR}")
-# endif ()
-# 
-# if (DEFINED ENV{HDF5_DIR})
-#   set (HDF5_ROOT ${HDF5_DIR})
-#   find_package (HDF5)
-# endif ()
 
 add_executable(${PROJECT_NAME} adcirpolate.f90
                main.f90 wetdry.f90 errors_and_msgs.f90
@@ -26,6 +18,15 @@ set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}\
 
 set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}\
                          ${ESMF_LINK_LINE} -g -cpp")
+
+if (${USE_NETCDF})
+    set(NETCDF_F90 "YES")
+    find_package(NetCDF REQUIRED)
+    find_package(HDF5 REQUIRED COMPONENTS Fortran)
+    target_include_directories(${PROJECT_NAME} PUBLIC ${NETCDF_INCLUDES} ${HDF5_INCLUDE_DIRS})
+    target_link_libraries(${PROJECT_NAME} PUBLIC ${NETCDF_LIBRARIES} ${HDF5_LIBRARIES})
+    target_compile_definitions(${PROJECT_NAME} PUBLIC NETCDF)
+endif ()
 
 #
 # Adding record length interpretation for Intel
@@ -48,4 +49,3 @@ add_custom_target(debug
   COMMAND ${CMAKE_COMMAND} -DCMAKE_BUILD_TYPE=Debug ${CMAKE_SOURCE_DIR}
   COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target all
   COMMENT " ")
-

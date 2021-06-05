@@ -1369,12 +1369,12 @@ contains
                             dstField=the_regrid_data%dst_mapped_field, &
                             routeHandle=the_regrid_data%mapped_route_handle, rc=rc)
       write(rc_str, "(I4)") rc
-      if (localPet == 0) call show_message("    mapped regriding done with code: "//rc_str)
+      if (localPet == 0) call show_message("    mapped regridding done with code: "//rc_str)
       call ESMF_FieldRegrid(srcField=the_regrid_data%src_datafield, &
                             dstField=the_regrid_data%dst_unmapped_field, &
                             routeHandle=the_regrid_data%unmapped_route_handle, rc=rc)
       write(rc_str, "(I4)") rc
-      if (localPet == 0) call show_message("    unmapped regriding done with code: "//&
+      if (localPet == 0) call show_message("    unmapped regridding done with code: "//&
                                            rc_str//new_line('A'))
       do i1 = 1, dst_data%NumOwnedND, 1
          if (abs(the_regrid_data%dst_maskptr(i1)) < 1.d-8) then

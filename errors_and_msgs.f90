@@ -23,7 +23,7 @@ contains
 
       call MPI_Comm_rank(MPI_COMM_WORLD, localPet, ierr)
       if (rc .NE. 0) then
-         write (*, "(A, I4, A, I6, A, A, A, I4)"), "Processor ", localPet, &
+         write (*, "(A, I4, A, I6, A, A, A, I4)") "Processor ", localPet, &
             " exited line: ", line_number, " in ", file_name, " with error: ", rc
       end if
    end subroutine
@@ -32,7 +32,7 @@ contains
       integer, intent(in)               :: line_number
       character(len=*), intent(in)      :: file_name, error_message
       call MPI_Comm_rank(MPI_COMM_WORLD, localPet, ierr)
-      write (*, "(A, I4, A, I6, A, A, A, A)"), "Processor ", localPet, &
+      write (*, "(A, I4, A, I6, A, A, A, A)") "Processor ", localPet, &
          " exited line: ", line_number, " in: ", file_name, &
          " with error: ", error_message
       stop
@@ -40,13 +40,13 @@ contains
 
    subroutine throw_error_and_stop(error_message)
       character(len=*), intent(in)      :: error_message
-      write (*, "(A, I4, A, I6, A, A, A, A)"), error_message
+      write (*, "(A, I4, A, I6, A, A, A, A)") error_message
       stop
    end subroutine
 
    subroutine just_show_message(in_message)
       character(len=*), intent(in)      :: in_message
-      write (*, "(A)"), in_message
+      write (*, "(A)") in_message
    end subroutine
 
 end module

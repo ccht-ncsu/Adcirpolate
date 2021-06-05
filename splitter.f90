@@ -74,7 +74,7 @@
       allocate (vert_g2l(global_data%NumNd))
       counter = 0
       do iv=1,global_data%NumNd
-        if(vert_found(iv))then
+        if(vert_found(iv).eq.1)then
           counter = counter + 1
           the_data%NdIDs(counter) = iv
           vert_g2l(iv) = counter
@@ -104,7 +104,7 @@
           the_data%ElConnect((ie-1)*NumNd_per_El+ivv) = lv
         enddo
       enddo
-#ifdef SLOW 
+#ifdef SLOW
       allocate (the_data%ElConnect(NumND_per_el*the_data%NumEl))
       do ie=1,the_data%NumEl
         ge    = the_data%ElIDs(ie)
