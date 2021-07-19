@@ -91,11 +91,11 @@ Once all of these files have been collected, check them over and make sure they 
 
 fort.15  
 
-Some of the parameters to note:
+Some of the parameters to note:  
 IHOT 0 - since no hotstart  
 RNDAY 15.0 - typical for a tidal spinup  
-NOUTE 3 - for netCDF files, 5 for netCDF4 
-NSPOOL/V/E/GV/GE 3600 - output is written every hour
+NOUTE 3 - for netCDF files, 5 for netCDF4  
+NSPOOL/V/E/GV/GE 3600 - output is written every hour. 
 NHSINC 86400 - means hotstart written once a day, every 24 hours  
 
 Cores
@@ -129,18 +129,18 @@ Before submitting, check all the files and make sure they are set-up properly fo
 
 fort.15  
 
-Some parameters to note:
-IHOT 67 - since there is hotstart file for this simulation, put either 67 or 68 (check files for specific number)
-RNDAY 15+X - where X is the length of the first part of the hotstart/storm run and 15 is the spinup run time
-WTIMINC 900 300 - for every 15 min/900 seconds reading of wind file, 300 ignore. 
-NOUTE 3 or 5 for netCDF files 1 for binary* need 1 for adcirpolate
-TOUTSE, TOUTFE - set for start and end time, here would be 15, starting after 15 of spin up then 15+X, where X is length of current run
-NSPOOL/V/E/GV/GE - 3600 output written every hour
-NHSINC - 43200 means hotstart written once every half a day, important if X is not a full day
+Some parameters to note:  
+IHOT 67 - since there is hotstart file for this simulation, put either 67 or 68 (check files for specific number)   
+RNDAY 15+X - where X is the length of the first part of the hotstart/storm run and 15 is the spinup run time   
+WTIMINC 900 300 - for every 15 min/900 seconds reading of wind file, 300 ignore   
+NOUTE 3 or 5 for netCDF files 1 for binary* need 1 for adcirpolate  
+TOUTSE, TOUTFE - set for start and end time, here would be 15, starting after 15 of spin up then 15+X, where X is length of current run  
+NSPOOL/V/E/GV/GE - 3600 output written every hour  
+NHSINC - 43200 means hotstart written once every half a day, important if X is not a full day  
 
 ***Additional point - make sure that the fort.15 is writing binary/ascii output files. This is necessary for adcirpolate to work properly.***
 
-fort.22
+fort.22  
 
 Read if using OWI winds. In the fort.22 file the second line specifies at which point the simulation starts reading from the OWI wind and pressure files. Depending on the data in which your simulation starts. For example, with Hurricane Matthew, we start the storm simulation on October 2nd, 2016 at midnight. In the wind files, the data is provided beginning 24 hours before this so we need to shift when to start reading the data. In the OWI wind files, time steps are in 15 minute increments. So for 24 hours, that would be 96 - 15 minute increments. The negative sign indicates that we are going forward in time, as opposed to back in time. The first and third lines for this simulation should be 2 (for two sets of OWI wind files) and 1.0 (multiplier if needed) respectively. 
 
@@ -154,11 +154,11 @@ When the above run (part three) is done there will be a hotstart file in the PE0
 
 Next we set up the fine directory. Within this directory we need the information for the next run which is typically a higher resolution simulation. Files will include those necessary for a typical ADCIRC run (submission scripts, executables, etc.) as well as the new mesh files. For this example the list includes: 
 
-fort.13
-fort.14 (new higher resolution mesh)
-fort.15
-Offsetsurface
-fort.22* (same as above, but need to change the fort.22 second line to read winds starting with the fine simulation)
+fort.13  
+fort.14 (new higher resolution mesh)  
+fort.15  
+Offsetsurface  
+fort.22* (same as above, but need to change the fort.22 second line to read winds starting with the fine simulation)  
 
 Make sure all of these files are set up then submit adcprep while in the fine directory to create the PE directories. Once this is complete, we can perform adcirpolate. Go up one directory above the fine and coarse directories and pull in the adcirpolate executable as well as the adcirpolate submission script and submit adcirpolate. The number of cores specified in the adcirpolate submission script needs to match the number of cores in both the fine simulation. Meaning, if 512 PE directories were generated then the adcirpolate submission script needs to ask for 512 cores.
 
@@ -166,8 +166,8 @@ Make sure all of these files are set up then submit adcprep while in the fine di
 
 When the above adcirpolate is complete, the fine simulation is ready to be performed. Go to the fine directory for this simulation and delete all of the PE directories. Then submit the submissions scripts in the following order:
 
-adcprep
-adchot
-padcirc
+adcprep  
+adchot  
+padcirc  
 
 Submission scripts are very similar to the ones previously used for the coarse and switching steps. Double check to make sure the number of cores and the job name are correct. 
