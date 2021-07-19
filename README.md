@@ -95,7 +95,7 @@ Some of the parameters to note:
 IHOT 0 - since no hotstart  
 RNDAY 15.0 - typical for a tidal spinup  
 NOUTE 3 - for netCDF files, 5 for netCDF4  
-NSPOOL/V/E/GV/GE 3600 - output is written every hour. 
+NSPOOL/V/E/GV/GE 3600 - output is written every hour   
 NHSINC 86400 - means hotstart written once a day, every 24 hours  
 
 Cores
